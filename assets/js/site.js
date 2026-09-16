@@ -17,6 +17,7 @@
   var GROUPS = [
     { id: 'start', title: 'เริ่มต้น', pages: ['home'] },
     { id: 'lessons', title: 'บทเรียน', pages: ['01-tps', '02-vu', '03-metrics', '04-percentiles', '05-load-profiles', '06-read-results'] },
+    { id: 'workflow', title: 'ใช้งานจริง', pages: ['workflow'] },
     { id: 'tools', title: 'เครื่องมือ', pages: ['calculator', 'latency'] },
     { id: 'practice', title: 'แบบฝึกหัด', pages: ['quiz', 'progress'] },
     { id: 'ref', title: 'อ้างอิง', pages: ['glossary', 'troubleshooting', 'examples'] }
@@ -30,6 +31,7 @@
     '04-percentiles': { title: '4. p95 / p99', file: 'lessons/04-percentiles.html', group: 'lessons', lesson: 4 },
     '05-load-profiles': { title: '5. รูปแบบการทดสอบ', file: 'lessons/05-load-profiles.html', group: 'lessons', lesson: 5 },
     '06-read-results': { title: '6. อ่านผลลัพธ์', file: 'lessons/06-read-results.html', group: 'lessons', lesson: 6 },
+    'workflow': { title: 'งานจริงของทีม', file: 'workflow.html', group: 'workflow' },
     'calculator': { title: 'เครื่องคำนวณ TPS/VU', file: 'tools/calculator.html', group: 'tools' },
     'latency': { title: 'สำรวจ latency จริง', file: 'tools/latency.html', group: 'tools' },
     'quiz': { title: 'แบบทดสอบท้ายบท', file: 'quiz.html', group: 'practice' },
@@ -306,6 +308,7 @@
           '<h2>ในเว็บนี้</h2>' +
           '<ul>' +
             '<li><a href="' + ctx.root + 'glossary.html">อภิธานศัพท์</a></li>' +
+            '<li><a href="' + ctx.root + 'workflow.html">งานจริงของทีม</a></li>' +
             '<li><a href="' + ctx.root + 'troubleshooting.html">แก้ปัญหาที่พบบ่อย</a></li>' +
             '<li><a href="' + ctx.root + 'examples.html">สคริปต์ตัวอย่าง</a></li>' +
             '<li><a href="' + ctx.root + 'progress.html">ความคืบหน้า</a></li>' +

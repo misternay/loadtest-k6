@@ -387,6 +387,65 @@ p code,li code,td code,th code,dd code,dt code{
 }
 .keypoint > :last-child{margin-bottom:0}
 
+/* ---------- สี่คำที่ต้องจำ (หน้าแรก) ----------
+   สี่แนวคิดที่เนื้อหาที่เหลือแขวนอยู่กับมัน — ใช้เส้นคั่นบางระหว่างบล็อก
+   ไม่ใช่การ์ดมุมโค้ง และไม่ใช้ขอบซ้ายสี เพื่อให้อ่านบนจอ 360px ได้ไม่ต้องเลื่อนแนวนอน */
+
+.four-words{
+  margin:1.2em 0 1.3em;
+  border-top:1px solid var(--border-strong);
+}
+.four-word{
+  border-bottom:1px solid var(--border);
+  padding:.85rem 0 .8rem;
+}
+.four-word dt{
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;
+  font-family:var(--font-mono);
+  font-size:1rem;font-weight:600;color:var(--fg);
+}
+.four-word__th{
+  font-family:var(--font-sans);
+  font-size:.885rem;font-weight:600;color:var(--accent);
+}
+.four-word dd{margin:.35rem 0 0}
+.four-word dd > p{
+  margin:0 0 .28em;font-size:.895rem;line-height:1.6;max-width:var(--article);
+}
+.four-word dd > p:last-child{margin-bottom:0}
+.four-word__label{
+  font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;
+  font-weight:600;color:var(--muted);margin-right:5px;
+}
+.four-word__meaning{color:var(--fg)}
+.four-word__evidence{color:var(--fg-soft);font-variant-numeric:tabular-nums}
+.four-word__trap{
+  display:flex;gap:6px;align-items:flex-start;color:var(--fg-soft);
+}
+.four-word__trap svg{
+  width:14px;height:14px;stroke-width:1.8;color:var(--warn);flex:0 0 auto;margin-top:.24em;
+}
+
+/* ประโยคเดียวที่ต้องจำ ปิดท้ายส่วนสี่คำ */
+.four-words__rule{
+  border-top:1px solid var(--border-strong);
+  border-bottom:1px solid var(--border-strong);
+  background:var(--bg-alt);
+  padding:.7rem .9rem;margin:0 0 1.2em;
+  max-width:var(--article);
+  font-weight:600;color:var(--fg);
+}
+
+/* ---------- บรรทัดอ้างกลับไปยังสี่คำ (ท้ายใจความสำคัญของบทเรียน 01–06) ---------- */
+
+.recall{
+  font-size:.83rem;color:var(--muted);margin:.15em 0 0;
+}
+.recall svg{
+  display:inline-block;vertical-align:-.14em;
+  width:13px;height:13px;stroke-width:1.8;color:var(--muted);margin-right:4px;
+}
+
 /* ตัวเลขหรือสูตรที่ต้องจำ — ล็อกความกว้างหลักไว้ เพื่อให้กวาดตาอ่านเทียบกันได้ */
 .key-figure{
   font-family:var(--font-mono);
@@ -524,6 +583,29 @@ details.table-details .table-wrap table.data thead th{position:static}
 .copy-btn:hover{background:var(--bg);color:var(--fg)}
 .copy-btn svg{width:12px;height:12px;stroke-width:1.7}
 .copy-btn.is-copied{border-color:var(--ok);color:var(--ok)}
+
+/* ---------- กายวิภาคของสคริปต์ k6 ----------
+   เครื่องหมาย ①–⑨ บอกความหมายด้วยสองอย่างพร้อมกัน คือ "รูปสัญลักษณ์" และ
+   "ตำแหน่งต้นบรรทัด" ไม่ได้พึ่งสีเพียงอย่างเดียว สีเป็นแค่ส่วนช่วยกวาดตา */
+
+.anatomy-mark{
+  font-weight:600;color:var(--accent);margin-right:.5em;
+}
+.anatomy-list{list-style:none;margin:1.2em 0;padding:0;max-width:var(--article)}
+.anatomy-list li{
+  position:relative;padding-left:2.15rem;margin-bottom:.75em;
+  font-size:.91rem;line-height:1.6;
+}
+.anatomy-list li:last-child{margin-bottom:0}
+.anatomy-list .anatomy-mark{
+  position:absolute;left:0;top:.02em;
+  display:flex;align-items:center;justify-content:center;
+  width:1.45rem;height:1.45rem;margin-right:0;
+  font-size:.95rem;
+  border:1px solid var(--border-strong);border-radius:2px;
+  background:var(--bg-alt);
+}
+.anatomy-list__term{font-weight:600;color:var(--fg)}
 
 /* ---------- callouts ---------- */
 
@@ -679,6 +761,84 @@ details.table-details .table-wrap table.data thead th{position:static}
 .field-error .fix{display:block;color:var(--fg-soft);margin-top:2px}
 .search-field{max-width:360px}
 .search-field input{font-family:var(--font-sans);font-variant-numeric:normal}
+
+/* ---------- สไลเดอร์คู่กับช่องกรอก ----------
+   วาด track/thumb เองจากโทเคน ไม่ปล่อยให้เบราว์เซอร์เลือกสีเอง
+   จึงคุมคอนทราสต์ได้จริงทั้งสองธีม: thumb = --accent บนพื้น --surface
+   และตัดกับรางที่เหลือ (--border-strong) เกิน 3:1 ทุกกรณี */
+
+.field .range{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:20px;margin:.1rem 0 0;padding:0;
+  background:transparent;border:0;border-radius:0;
+  font-variant-numeric:normal;box-shadow:none;
+  cursor:pointer;
+}
+.field .range::-webkit-slider-runnable-track{
+  height:6px;border-radius:3px;background:var(--border-strong);
+}
+.field .range::-moz-range-track{
+  height:6px;border-radius:3px;background:var(--border-strong);
+}
+.field .range::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:16px;height:16px;margin-top:-5px;
+  border:1px solid var(--accent);border-radius:50%;background:var(--accent);
+}
+.field .range::-moz-range-thumb{
+  width:16px;height:16px;
+  border:1px solid var(--accent);border-radius:50%;background:var(--accent);
+}
+.field .range:hover::-webkit-slider-thumb,
+.field .range:active::-webkit-slider-thumb{background:var(--accent-strong);border-color:var(--accent-strong)}
+.field .range:hover::-moz-range-thumb,
+.field .range:active::-moz-range-thumb{background:var(--accent-strong);border-color:var(--accent-strong)}
+.field .range:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.field .range-label{font-size:.75rem;font-weight:400;color:var(--muted)}
+.slider-hint{
+  display:flex;align-items:center;gap:6px;
+  font-size:.78rem;color:var(--muted);margin:-.1em 0 1.15em;
+}
+.slider-hint svg{width:13px;height:13px;stroke-width:1.8;color:var(--muted);flex:0 0 auto}
+
+/* ---------- เช็คลิสต์ก่อนรัน (หน้าใช้งานจริง) ---------- */
+
+.check-progress{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--surface);padding:.6rem .8rem;margin:1.2em 0 .9em;
+  max-width:var(--article);
+}
+.check-progress__bar{
+  flex:1 1 auto;height:6px;border-radius:3px;
+  background:var(--border-strong);overflow:hidden;
+}
+.check-progress__fill{
+  display:block;height:100%;width:0;
+  background:var(--accent);transition:width .15s ease;
+}
+.check-progress__count{
+  margin:0;font-size:.83rem;color:var(--fg-soft);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+
+.checklist{list-style:none;margin:0 0 1.2em;padding:0;max-width:var(--article)}
+.checklist li{margin:0}
+.check-item{
+  display:flex;gap:10px;align-items:flex-start;
+  border-bottom:1px solid var(--border);
+  padding:.6rem .2rem;font-size:.9rem;line-height:1.6;
+  cursor:pointer;
+}
+.check-item:first-child{border-top:1px solid var(--border)}
+.check-item:hover{background:var(--hover-row)}
+.check-item input{
+  flex:0 0 auto;width:17px;height:17px;margin:.3em 0 0;
+  accent-color:var(--accent);cursor:pointer;
+}
+.check-item__text{min-width:0}
+.check-item.is-done .check-item__text{color:var(--muted)}
+.check-saved{font-size:.8rem;color:var(--fg-soft)}
 
 /* ---------- result panel ---------- */
 
@@ -1002,5 +1162,6 @@ details.faq[open] > summary{border-bottom:1px solid var(--border)}
   .shell{display:block;max-width:none;padding:0}
   .article{max-width:none}
   .takeaways,.keypoint{break-inside:avoid}
+  .four-word,.check-item,.anatomy-list li{break-inside:avoid}
   a[href^="http"]::after{content:" (" attr(href) ")";font-size:.8em;color:#555}
 }

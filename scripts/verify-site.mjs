@@ -82,6 +82,70 @@ function stripNonMarkup(html) {
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
 }
 
+/* ---------- ตัวช่วยที่ใช้ร่วมกันหลายกลุ่ม ---------- */
+
+/* ดึงเนื้อในบล็อกปีกกาที่เริ่มจากหัวเรื่องที่กำหนด แล้วคืนค่าเป็น map ของโทเคน
+   (ใช้ทั้งกลุ่ม 9 ที่ตรวจโทเคนธีม และกลุ่ม 12 ที่ตรวจคอนทราสต์ของสไลเดอร์) */
+function cssBlockTokens(source, startIndex) {
+  const open = source.indexOf('{', startIndex);
+  if (open === -1) return null;
+  let depth = 0;
+  let end = -1;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) return null;
+  const body = source.slice(open + 1, end);
+  const map = {};
+  for (const m of body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) {
+    map[m[1].trim()] = m[2].trim();
+  }
+  return { body, map };
+}
+
+/* ความสว่างสัมพัทธ์และอัตราส่วนคอนทราสต์ตามนิยาม WCAG 2.x */
+function hexLuminance(value) {
+  const hex = String(value).trim().replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return NaN;
+  const parts = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+  return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
+}
+
+function hexContrast(a, b) {
+  const la = hexLuminance(a);
+  const lb = hexLuminance(b);
+  if (Number.isNaN(la) || Number.isNaN(lb)) return NaN;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/* ข้อความที่ผู้ใช้เห็นจริง — ตัดแท็กและคอมเมนต์ออก แล้วยุบช่องว่าง */
+function visibleText(html) {
+  return String(html)
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/* แบ่งคำภาษาไทยด้วยตัวแบ่งคำของ ICU — วิธีเดียวกับ scripts/word-count.mjs */
+const segmenter = new Intl.Segmenter('th', { granularity: 'word' });
+function countWords(text) {
+  let n = 0;
+  for (const part of segmenter.segment(text)) if (part.isWordLike) n++;
+  return n;
+}
+
 /* ---------- 1) ไฟล์ที่ต้องมีอยู่จริง ---------- */
 
 const REQUIRED = [
@@ -92,6 +156,7 @@ const REQUIRED = [
   'site/lessons/04-percentiles.html',
   'site/lessons/05-load-profiles.html',
   'site/lessons/06-read-results.html',
+  'site/workflow.html',
   'site/tools/calculator.html',
   'site/tools/latency.html',
   'site/quiz.html',
@@ -785,26 +850,7 @@ group('theme', '9. ธีมสว่าง/มืด: สคริปต์ต�
   ];
 
   /* ดึงเนื้อในบล็อกปีกกาที่เริ่มจากหัวเรื่องที่กำหนด แล้วคืนค่าเป็น map ของโทเคน */
-  function tokenMap(source, startIndex) {
-    const open = source.indexOf('{', startIndex);
-    if (open === -1) return null;
-    let depth = 0;
-    let end = -1;
-    for (let i = open; i < source.length; i++) {
-      if (source[i] === '{') depth++;
-      else if (source[i] === '}') {
-        depth--;
-        if (depth === 0) { end = i; break; }
-      }
-    }
-    if (end === -1) return null;
-    const body = source.slice(open + 1, end);
-    const map = {};
-    for (const m of body.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) {
-      map[m[1].trim()] = m[2].trim();
-    }
-    return { body, map };
-  }
+  const tokenMap = cssBlockTokens;
 
   const rootIdx = css.indexOf(':root{');
   const light = rootIdx === -1 ? null : tokenMap(css, rootIdx);
@@ -852,19 +898,8 @@ group('theme', '9. ธีมสว่าง/มืด: สคริปต์ต�
     }
 
     /* --accent ของโหมดมืดต้องสว่างขึ้นจริง เพื่อให้ลิงก์ผ่านคอนทราสต์บนพื้นเข้ม */
-    function luminance(value) {
-      const hex = String(value).trim().replace('#', '');
-      if (!/^[0-9a-f]{6}$/i.test(hex)) return NaN;
-      const parts = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
-        .map((c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
-      return 0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2];
-    }
-    function contrast(a, b) {
-      const la = luminance(a);
-      const lb = luminance(b);
-      if (Number.isNaN(la) || Number.isNaN(lb)) return NaN;
-      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-    }
+    const luminance = hexLuminance;
+    const contrast = hexContrast;
 
     const accentLight = luminance(light.map['--accent']);
     const accentDark = luminance(dark.map['--accent']);
@@ -1127,6 +1162,339 @@ group('substance', '11. สาระครบตามเกณฑ์ส่ง�
     'แบบทดสอบยังมี 36 ข้อใน 6 ชุด พร้อมเฉลยและคำอธิบายครบทุกข้อ',
     'จำนวนข้อ เฉลย หรือคำอธิบายของแบบทดสอบเปลี่ยนไป',
     'ข้อ=' + qCount + ', เฉลย=' + answerCount + ', อธิบาย=' + explainCount + ', ชุด=' + setCount2);
+}
+
+/* ---------- 12) โมดูลที่เพิ่มในรอบนี้ ----------
+   สี่อย่างที่เพิ่มพร้อมกัน: สี่คำที่ต้องจำ, สไลเดอร์คู่ช่องกรอก, กายวิภาคของสคริปต์ k6
+   และหน้างานจริงที่มีเช็คลิสต์ ทุกด่านผูกกับสิ่งที่ผู้ใช้เห็นหรือใช้จริง
+   ไม่ใช่แค่การมีอยู่ของสตริงในไฟล์ */
+
+group('modules', '12. โมดูลที่เพิ่มในรอบนี้: สี่คำ · สไลเดอร์ · กายวิภาค · หน้างานจริง');
+
+{
+  const css = read('site/assets/css/main.css');
+  const siteJs = read('site/assets/js/site.js');
+  const LESSONS = ['01-tps', '02-vu', '03-metrics', '04-percentiles', '05-load-profiles', '06-read-results'];
+  const FOUR_WORDS = ['VU', 'RPS', 'RT', 'Budget'];
+
+  /* ---------- (ก) สี่คำที่ต้องจำ บนหน้าแรก + บรรทัดอ้างกลับในบทเรียน ---------- */
+
+  const indexHtml = read('site/index.html');
+  const fourProblems = [];
+
+  if (!/id="four-words"/.test(indexHtml)) fourProblems.push('index.html ไม่มีหัวข้อ id="four-words"');
+  if (!/class="four-words"/.test(indexHtml)) fourProblems.push('index.html ไม่ได้ใช้คลาส four-words');
+
+  const fourBlocks = [...indexHtml.matchAll(/<div class="four-word">[\s\S]*?<dt>([\s\S]*?)<\/dt>/g)]
+    .map((m) => visibleText(m[1]));
+  if (fourBlocks.length !== FOUR_WORDS.length) {
+    fourProblems.push('พบบล็อกคำ ' + fourBlocks.length + ' บล็อก ต้องมี ' + FOUR_WORDS.length);
+  } else {
+    FOUR_WORDS.forEach((word, i) => {
+      if (!fourBlocks[i].startsWith(word)) {
+        fourProblems.push('บล็อกที่ ' + (i + 1) + ' ไม่ได้เริ่มด้วย ' + word +
+          ' (พบ "' + fourBlocks[i].slice(0, 14) + '")');
+      }
+    });
+  }
+
+  /* ทุกคำต้องมีครบสามส่วน: ความหมาย หลักฐานจากข้อมูลจริง และกับดักที่พบบ่อย */
+  const partCounts = ['four-word__meaning', 'four-word__evidence', 'four-word__trap'].map((cls) =>
+    (indexHtml.match(new RegExp('class="' + cls + '"', 'g')) || []).length);
+  if (partCounts.some((n) => n !== FOUR_WORDS.length)) {
+    fourProblems.push('แต่ละคำต้องมีส่วนความหมาย/ตัวเลขจากการรัน/กับดัก ครบ ' + FOUR_WORDS.length +
+      ' ชุด (ความหมาย ' + partCounts[0] + ', ตัวเลข ' + partCounts[1] + ', กับดัก ' + partCounts[2] + ')');
+  }
+  if (!indexHtml.includes('VU สร้างโหลด · RPS คือโหลดที่ส่งจริง · RT คือประสบการณ์ผู้ใช้ · Budget คือคำตัดสิน')) {
+    fourProblems.push('ไม่พบประโยคปิดท้ายที่ต้องจำ');
+  }
+  const fourIdx = indexHtml.indexOf('id="four-words"');
+  const pathIdx = indexHtml.indexOf('id="reading-path"');
+  if (fourIdx === -1 || pathIdx === -1 || fourIdx > pathIdx) {
+    fourProblems.push('ส่วนสี่คำต้องอยู่ก่อนหัวข้อ "เส้นทางการอ่าน"');
+  }
+
+  check(fourProblems.length === 0,
+    'หน้าแรกมีส่วน "สี่คำที่ต้องจำ" ก่อนเส้นทางการอ่าน ครบ 4 คำ แต่ละคำมี ความหมาย · ตัวเลขจากการรัน · กับดัก พร้อมประโยคปิดท้ายเดียว',
+    'ส่วนสี่คำบนหน้าแรกยังไม่ครบ',
+    fourProblems.slice(0, 8).join(' | '));
+
+  /* บรรทัดอ้างกลับในบทเรียน 01–06 — สั้น และอยู่บนสุดของเนื้อหา */
+  const recallProblems = [];
+  const recallSummary = [];
+  for (const id of LESSONS) {
+    const rel = 'site/lessons/' + id + '.html';
+    if (!exists(rel)) { recallProblems.push(rel + ' ไม่พบไฟล์'); continue; }
+    const html = read(rel);
+    const m = html.match(/<p class="recall">([\s\S]*?)<\/p>/);
+    if (!m) { recallProblems.push(rel + ' ไม่มีบรรทัดอ้างกลับ (.recall)'); continue; }
+    if (!m[1].includes('href="../index.html#four-words"')) {
+      recallProblems.push(rel + ' บรรทัดอ้างกลับไม่ได้ชี้ไป ../index.html#four-words');
+    }
+    const words = countWords(visibleText(m[1]));
+    recallSummary.push(id + ' ' + words + ' คำ');
+    if (words > 12) {
+      recallProblems.push(rel + ' บรรทัดอ้างกลับยาว ' + words + ' คำ (ต้องไม่เกิน 12)');
+    }
+    const firstH2 = html.indexOf('<h2');
+    if (firstH2 !== -1 && html.indexOf('class="recall"') > firstH2) {
+      recallProblems.push(rel + ' บรรทัดอ้างกลับอยู่หลังหัวข้อใหญ่หัวข้อแรก');
+    }
+  }
+  check(recallProblems.length === 0,
+    'บทเรียนทั้ง 6 บทมีบรรทัดอ้างกลับไปยังส่วนสี่คำ ไม่เกิน 12 คำต่อหน้า (' + recallSummary.join(' · ') + ')',
+    'บรรทัดอ้างกลับในบทเรียนยังไม่ครบหรือยาวเกิน',
+    recallProblems.slice(0, 8).join(' | '));
+
+  /* ---------- (ข) สไลเดอร์คู่กับช่องกรอก ---------- */
+
+  const calcHtml = read('site/tools/calculator.html');
+  const numberIds = [...calcHtml.matchAll(/<input type="number"[^>]*\sid="([^"]+)"/g)].map((m) => m[1]);
+  const sliderProblems = [];
+  const valueTexts = [];
+
+  numberIds.forEach((id) => {
+    const m = calcHtml.match(new RegExp('<input type="range"[^>]*\\sid="sl-' + id + '"([^>]*)>'));
+    if (!m) { sliderProblems.push(id + ' ไม่มีสไลเดอร์คู่กัน'); return; }
+    const attrs = m[1];
+    for (const attr of ['min', 'max', 'step', 'value']) {
+      if (!new RegExp('\\s' + attr + '="[^"]+"').test(attrs)) {
+        sliderProblems.push('สไลเดอร์ของ ' + id + ' ไม่มี ' + attr);
+      }
+    }
+    if (!calcHtml.includes('<label class="range-label" for="sl-' + id + '">')) {
+      sliderProblems.push('สไลเดอร์ของ ' + id + ' ไม่มี <label for> ของตัวเอง');
+    }
+    const vt = (attrs.match(/aria-valuetext="([^"]*)"/) || [])[1] || '';
+    const unit = (attrs.match(/data-unit="([^"]*)"/) || [])[1] || '';
+    const value = (attrs.match(/\svalue="([^"]*)"/) || [])[1] || '';
+    if (vt === '') { sliderProblems.push('สไลเดอร์ของ ' + id + ' ไม่มี aria-valuetext'); return; }
+    if (unit === '') { sliderProblems.push('สไลเดอร์ของ ' + id + ' ไม่มีหน่วยใน data-unit'); return; }
+    /* อ่านออกเสียงแล้วต้องได้ทั้งค่าจริงและหน่วย ไม่ใช่ตัวเลขลอย ๆ */
+    if (vt !== value + ' ' + unit) {
+      sliderProblems.push('aria-valuetext ของ ' + id + ' เป็น "' + vt +
+        '" แต่ค่ากับหน่วยรวมกันเป็น "' + value + ' ' + unit + '"');
+    }
+    valueTexts.push(vt);
+  });
+
+  if (numberIds.length !== 11) {
+    sliderProblems.push('พบช่องกรอกตัวเลข ' + numberIds.length + ' ช่อง (คาดไว้ 11 ช่อง)');
+  }
+
+  /* การซิงก์สองทางต้องมีอยู่จริงในสคริปต์ของหน้า */
+  if (!calcHtml.includes('input.value = slider.value')) {
+    sliderProblems.push('ลากสไลเดอร์ไม่ได้เขียนค่าลงช่องกรอก');
+  }
+  if (!calcHtml.includes('slider.value = next')) {
+    sliderProblems.push('พิมพ์ในช่องกรอกไม่ได้ขยับสไลเดอร์');
+  }
+  if (!calcHtml.includes("form.addEventListener('input', pullAllSliders)")) {
+    sliderProblems.push('การพิมพ์ในช่องกรอกไม่ได้ผูกกับการขยับสไลเดอร์');
+  }
+  if (!calcHtml.includes('writeValueText')) {
+    sliderProblems.push('aria-valuetext ไม่ได้ถูกอัปเดตเมื่อค่าเปลี่ยน');
+  }
+  /* ค่าที่พิมพ์ต้องไม่ถูกสไลเดอร์แก้: ต้องมีการ์ดปล่อยผ่านเมื่อว่าง/ไม่ใช่ตัวเลข/นอกช่วง */
+  if (!/!Number\.isFinite\(n\)\)\s*return/.test(calcHtml)) {
+    sliderProblems.push('สไลเดอร์ไม่ได้ปล่อยผ่านเมื่อช่องกรอกว่างหรือไม่ใช่ตัวเลข');
+  }
+  if (!/n > Number\(slider\.max\)\)\s*return/.test(calcHtml)) {
+    sliderProblems.push('สไลเดอร์ไม่ได้ปล่อยผ่านเมื่อค่าที่พิมพ์อยู่นอกช่วง');
+  }
+  if (!calcHtml.includes('ลากเพื่อสำรวจ พิมพ์เพื่อความแม่น')) {
+    sliderProblems.push('ไม่พบหมายเหตุ "ลากเพื่อสำรวจ พิมพ์เพื่อความแม่น" ใต้กลุ่มช่องกรอก');
+  }
+
+  /* CSS ของสไลเดอร์ต้องวาดจากโทเคน ไม่ใช่สีตายตัว และต้องมี focus-visible ของตัวเอง */
+  const rangeBlock = css.slice(css.indexOf('.field .range{'), css.indexOf('.slider-hint'));
+  if (!rangeBlock) {
+    sliderProblems.push('CSS ไม่มีกฎ .field .range');
+  } else {
+    if (!/-webkit-slider-runnable-track[\s\S]*?background:var\(--border-strong\)/.test(rangeBlock)) {
+      sliderProblems.push('รางของสไลเดอร์ไม่ได้ใช้สีจากโทเคน --border-strong');
+    }
+    if (!/-webkit-slider-thumb[\s\S]*?background:var\(--accent\)/.test(rangeBlock)) {
+      sliderProblems.push('หัวเลื่อนของสไลเดอร์ไม่ได้ใช้สีจากโทเคน --accent');
+    }
+    if (!/:focus-visible\{outline:2px solid var\(--accent\)/.test(rangeBlock)) {
+      sliderProblems.push('สไลเดอร์ไม่มีสถานะ focus-visible ของตัวเอง');
+    }
+    if (/#[0-9a-fA-F]{3,8}\b/.test(rangeBlock.replace(/var\([^)]*\)/g, ''))) {
+      sliderProblems.push('CSS ของสไลเดอร์มีสีฮาร์ดโค้ด');
+    }
+  }
+
+  check(sliderProblems.length === 0,
+    'ช่องกรอกตัวเลขทั้ง ' + numberIds.length + ' ช่องมีสไลเดอร์คู่กัน ซิงก์สองทาง มี <label for> แยก ' +
+    'และ aria-valuetext อ่านออกเสียงเป็นค่าจริงพร้อมหน่วย (' + valueTexts.length + ' ตัว)',
+    'สไลเดอร์หรือการเข้าถึงยังไม่ครบ',
+    sliderProblems.slice(0, 8).join(' | '));
+
+  /* ---------- (ค) กายวิภาคของสคริปต์ k6 ---------- */
+
+  const exHtml = read('site/examples.html');
+  const anaProblems = [];
+
+  const marks = [...exHtml.matchAll(/\{\s*mark:\s*'([^']+)',\s*line:\s*(\d+),\s*anchor:\s*'([^']+)'\s*\}/g)]
+    .map((m) => ({ mark: m[1], line: Number(m[2]), anchor: m[3] }));
+
+  if (marks.length < 7) {
+    anaProblems.push('กำหนดหมายเลขกำกับไว้ ' + marks.length + ' ตัว ต้องมีอย่างน้อย 7');
+  }
+  if (new Set(marks.map((a) => a.mark)).size !== marks.length) {
+    anaProblems.push('มีหมายเลขซ้ำกัน');
+  }
+
+  /* ทุกหมายเลขต้องชี้บรรทัดที่มี anchor อยู่จริง — ถ้าไฟล์ load.js ถูกแก้จนบรรทัดเลื่อน ด่านนี้จะฟ้อง */
+  const loadLines = read('site/examples/load.js').split('\n');
+  marks.forEach((a) => {
+    const text = loadLines[a.line - 1];
+    if (text === undefined || !text.includes(a.anchor)) {
+      anaProblems.push('หมายเลข ' + a.mark + ' ชี้บรรทัดที่ ' + a.line +
+        ' ของ load.js ซึ่งไม่มี ' + JSON.stringify(a.anchor));
+    }
+  });
+
+  /* รายการคำอธิบายใต้โค้ดต้องครบทุกหมายเลข เรียงตรงกัน และเป็นประโยคจริง */
+  const listItems = [...exHtml.matchAll(/<li>\s*<span class="anatomy-mark">([^<]+)<\/span>([\s\S]*?)<\/li>/g)]
+    .map((m) => ({ mark: m[1], text: visibleText(m[2]) }));
+  if (listItems.length !== marks.length) {
+    anaProblems.push('รายการคำอธิบายมี ' + listItems.length + ' ข้อ ไม่เท่ากับจำนวนหมายเลข ' + marks.length);
+  }
+  listItems.forEach((item, i) => {
+    if (marks[i] && item.mark !== marks[i].mark) {
+      anaProblems.push('ลำดับหมายเลขในรายการไม่ตรงกับในโค้ดที่ตำแหน่ง ' + (i + 1));
+    }
+    if (item.text.length < 40) {
+      anaProblems.push('คำอธิบายหมายเลข ' + item.mark + ' สั้นเกินกว่าจะบอกเหตุผล (' + item.text.length + ' อักขระ)');
+    }
+  });
+
+  /* โค้ดที่แสดงต้องมาจากไฟล์จริง ไม่ใช่สำเนาที่เพี้ยนได้ */
+  if (!exHtml.includes("fetch(ctx.root + 'examples/load.js'")) {
+    anaProblems.push('ไม่ได้ดึงไฟล์ examples/load.js จริงมาแสดง');
+  }
+  if (!exHtml.includes('anatomy-mark') || !css.includes('.anatomy-mark')) {
+    anaProblems.push('เครื่องหมายกำกับไม่ได้ใช้คลาส .anatomy-mark ที่มีนิยามใน CSS');
+  }
+  /* ปุ่มคัดลอกต้องคืนข้อความไฟล์จริง (ไม่มีเครื่องหมาย) จึงเอาไปรันได้ */
+  if (!/copyButton\(function \(\) \{ return code; \}/.test(exHtml)) {
+    anaProblems.push('ปุ่มคัดลอกของกายวิภาคไม่ได้คืนข้อความไฟล์จริง');
+  }
+
+  check(anaProblems.length === 0,
+    'หน้ากายวิภาคแสดง examples/load.js จริงพร้อมหมายเลขกำกับ ' + marks.length +
+    ' ตัว (มากกว่าเกณฑ์ขั้นต่ำ 7) ทุกตัวมีคำอธิบายใต้โค้ดครบ และ anchor ตรงกับบรรทัดจริงในไฟล์',
+    'กายวิภาคของสคริปต์ยังไม่ครบ',
+    anaProblems.slice(0, 8).join(' | '));
+
+  /* ---------- (ง) หน้างานจริง + เช็คลิสต์ ---------- */
+
+  const wfHtml = read('site/workflow.html');
+  const wfProblems = [];
+  const CHECKLIST_TOTAL = 8;
+
+  const boxes = [...wfHtml.matchAll(/<input type="checkbox"[^>]*\sid="([^"]+)"/g)].map((m) => m[1]);
+  if (boxes.length !== CHECKLIST_TOTAL) {
+    wfProblems.push('พบ checkbox ' + boxes.length + ' ตัว ต้องมี ' + CHECKLIST_TOTAL);
+  }
+  boxes.forEach((id) => {
+    if (!wfHtml.includes('<label class="check-item" for="' + id + '">')) {
+      wfProblems.push('checkbox ' + id + ' ไม่มี <label for> ผูก');
+    }
+  });
+  if (!wfHtml.includes("var KEY = 'ltk6.checklist.v1'")) {
+    wfProblems.push('เช็คลิสต์ไม่ได้ใช้คีย์ ltk6.checklist.v1');
+  }
+  if (!/localStorage\.getItem\(KEY\)/.test(wfHtml) || !/localStorage\.setItem\(KEY/.test(wfHtml)) {
+    wfProblems.push('ไม่ได้อ่านและเขียนค่าเช็คลิสต์ผ่าน localStorage');
+  }
+  if (!/window\.confirm\(/.test(wfHtml)) {
+    wfProblems.push('ปุ่มรีเซ็ตไม่ได้ถามยืนยันก่อนล้างด้วย confirm()');
+  }
+  /* แถบความคืบหน้าต้องคำนวณจากจำนวนที่ติ๊กจริง ไม่ใช่ข้อความคงที่ */
+  if (!/role="progressbar"/.test(wfHtml)) {
+    wfProblems.push('แถบความคืบหน้าไม่มี role="progressbar"');
+  }
+  if (!/'ติ๊กแล้ว ' \+ done \+ '\/' \+ TOTAL/.test(wfHtml)) {
+    wfProblems.push('ข้อความความคืบหน้าไม่ได้นับจากจำนวนที่ติ๊กจริง');
+  }
+  /* localStorage ใช้ไม่ได้ต้องไม่ทำให้หน้าค้าง */
+  if (!/try\s*\{[\s\S]*?\}\s*catch/.test(wfHtml)) {
+    wfProblems.push('ไม่มีการกันข้อผิดพลาดจากการเข้าถึง localStorage');
+  }
+  if (!/class="callout callout--warn storage-notice"/.test(wfHtml)) {
+    wfProblems.push('ไม่มีข้อความแจ้งอย่างสุภาพเมื่อบันทึกค่าไว้ไม่ได้');
+  }
+  /* ต้องไม่ถูกนับเป็นบทเรียนที่ 7 */
+  if (!/data-page="workflow"/.test(wfHtml)) {
+    wfProblems.push('workflow.html ไม่ได้ตั้ง data-page="workflow"');
+  }
+  const lessonOrderRaw = (siteJs.match(/var LESSON_ORDER = \[([^\]]*)\]/) || [])[1] || '';
+  const lessonIds = (lessonOrderRaw.match(/'[^']+'/g) || []).map((s) => s.replace(/'/g, ''));
+  if (lessonIds.length !== 6) {
+    wfProblems.push('LESSON_ORDER มี ' + lessonIds.length + ' รายการ ต้องมี 6');
+  }
+  if (lessonIds.includes('workflow')) {
+    wfProblems.push('workflow ถูกนับเป็นบทเรียน (อยู่ใน LESSON_ORDER)');
+  }
+  /* เนื้อหาสามส่วนต้องอยู่ครบ และไม่ซ้ำมุมกับหน้าแก้ปัญหา */
+  for (const anchor of ['id="workflow"', 'id="checklist"', 'id="failures"']) {
+    if (!wfHtml.includes(anchor)) wfProblems.push('workflow.html ไม่มีหัวข้อ ' + anchor);
+  }
+  if (!wfHtml.includes('href="troubleshooting.html"')) {
+    wfProblems.push('workflow.html ไม่ได้ชี้ไปหน้าแก้ปัญหาเพื่อแยกขอบเขตให้ชัด');
+  }
+
+  check(wfProblems.length === 0,
+    'workflow.html มีเวิร์กโฟลว์ 6 ขั้น เช็คลิสต์ ' + CHECKLIST_TOTAL +
+    ' ข้อที่เป็น checkbox จริงพร้อม label ครบ ใช้คีย์ ltk6.checklist.v1 และไม่ถูกนับเป็นบทเรียนที่ 7',
+    'หน้างานจริงหรือเช็คลิสต์ยังไม่ครบ',
+    wfProblems.slice(0, 8).join(' | '));
+
+  /* ---------- (จ) ทุกหน้ามีลิงก์ไปงานจริงอยู่ในเมนู ---------- */
+
+  const menuProblems = [];
+
+  const pagesEntry = siteJs.match(/'workflow':\s*\{([^}]*)\}/);
+  if (!pagesEntry) menuProblems.push('site.js ไม่มีรายการหน้า workflow ใน PAGES');
+  else if (!/file:\s*'workflow\.html'/.test(pagesEntry[1])) {
+    menuProblems.push('PAGES.workflow ไม่ได้ชี้ไป workflow.html');
+  }
+
+  const groupEntry = siteJs.match(/\{ id: 'workflow', title: '([^']*)', pages: \[([^\]]*)\] \}/);
+  if (!groupEntry) menuProblems.push('site.js ไม่มีกลุ่ม "ใช้งานจริง"');
+  else {
+    if (groupEntry[1] !== 'ใช้งานจริง') {
+      menuProblems.push('ชื่อกลุ่มเป็น "' + groupEntry[1] + '" ไม่ใช่ "ใช้งานจริง"');
+    }
+    if (!/'workflow'/.test(groupEntry[2])) menuProblems.push('กลุ่ม "ใช้งานจริง" ไม่มีหน้า workflow');
+  }
+
+  const groupTitles = [...siteJs.matchAll(/title: '([^']+)', pages: \[/g)].map((m) => m[1]);
+  const lessonGroupAt = groupTitles.indexOf('บทเรียน');
+  const workflowGroupAt = groupTitles.indexOf('ใช้งานจริง');
+  if (workflowGroupAt === -1 || workflowGroupAt !== lessonGroupAt + 1) {
+    menuProblems.push('กลุ่ม "ใช้งานจริง" ไม่ได้อยู่ต่อจากกลุ่มบทเรียน (ลำดับ: ' + groupTitles.join(' → ') + ')');
+  }
+
+  /* เมนูสร้างจาก GROUPS ชุดเดียวในทุกหน้า จึงต้องมีทุกหน้าในเมนูจริง
+     และต้องมี workflow อยู่ในนั้น เพื่อให้ทุกหน้าได้ลิงก์นี้ */
+  const menuFiles = [...siteJs.matchAll(/file: '([^']+)'/g)].map((m) => m[1]);
+  const htmlRels = findAllHtml(site).map((f) => path.relative(site, f).split(path.sep).join('/'));
+  const notInMenu = htmlRels.filter((r) => !menuFiles.includes(r));
+  if (notInMenu.length) menuProblems.push('หน้าที่ไม่มีอยู่ในเมนูเลย: ' + notInMenu.join(', '));
+  if (!menuFiles.includes('workflow.html')) menuProblems.push('เมนูไม่มี workflow.html');
+
+  check(menuProblems.length === 0,
+    'เมนูด้านข้างมีกลุ่ม "ใช้งานจริง" ต่อจากกลุ่มบทเรียน และทุกหน้า (' + htmlRels.length +
+    ' หน้า) อยู่ในเมนูชุดเดียวกัน จึงมีลิงก์ไป workflow.html ครบทุกหน้า',
+    'ลิงก์ไปงานจริงในเมนูยังไม่ครบทุกหน้า',
+    menuProblems.slice(0, 8).join(' | '));
+
+  note('ด่านชุดนี้ตรวจเชิงโครงสร้างฝั่งไฟล์ ส่วนการลากสไลเดอร์ การติ๊กเช็คลิสต์ และคอนทราสต์ของ track/thumb ' +
+    'วัดจากเบราว์เซอร์จริงใน scripts/browser-check.mjs');
 }
 
 /* ---------- รายงานผล ---------- */

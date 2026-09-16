@@ -218,6 +218,62 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
       <a href="tools/latency.html">เครื่องสำรวจ latency</a>
     </p>
 
+    <h2 id="four-words">สี่คำที่ต้องจำ</h2>
+
+    <p>
+      เนื้อหาที่เหลือทั้งเว็บแขวนอยู่กับสี่คำนี้ ถ้าจำสี่คำนี้ได้ ก็อ่านตัวเลขทุกหน้าได้โดยไม่หลง
+      แต่ละคำมีตัวเลขจริงจากการรันที่บันทึกไว้ในเว็บนี้กำกับ และมีกับดักที่พบบ่อยที่สุดของคำนั้น
+    </p>
+
+    <dl class="four-words">
+      <div class="four-word">
+        <dt>VU <span class="four-word__th">· ผู้ใช้เสมือน (virtual user)</span></dt>
+        <dd>
+          <p class="four-word__meaning"><span class="four-word__label">ความหมาย</span>VU หนึ่งตัวคือคนงานหนึ่งคนที่รันฟังก์ชัน <code>default()</code> เป็นลูป และว่างงานทันทีระหว่างรอ response</p>
+          <p class="four-word__evidence"><span class="four-word__label">ตัวเลขจากการรันนี้</span>ขอ 10 VU และ k6 รายงาน <code>vus</code>/<code>vus_max</code> เป็น <span class="key-figure">10</span>/<span class="key-figure">10</span> ตลอด 12.36 วินาที</p>
+          <p class="four-word__trap">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+            <span>คิดว่า VU หนึ่งตัวยิงได้หนึ่งคำขอต่อวินาที — ในการรันนี้ 10 VU รวมกันได้ <span class="key-figure">93.44</span> คำขอต่อวินาที</span>
+          </p>
+        </dd>
+      </div>
+      <div class="four-word">
+        <dt>RPS <span class="four-word__th">· คำขอต่อวินาที (requests per second)</span></dt>
+        <dd>
+          <p class="four-word__meaning"><span class="four-word__label">ความหมาย</span>จำนวนคำขอ HTTP ที่ส่งจริงและสำเร็จต่อวินาที ตรงกับบรรทัด <code>http_reqs</code> ของ k6</p>
+          <p class="four-word__evidence"><span class="four-word__label">ตัวเลขจากการรันนี้</span><span class="key-figure">1,155</span> คำขอ ÷ <span class="key-figure">12.36</span> วินาที = <span class="key-figure">93.44</span> คำขอต่อวินาที</p>
+          <p class="four-word__trap">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+            <span>หารด้วยระยะเวลาที่ตั้งใน stages แทนเวลาที่ k6 รายงาน เพราะการรันจริงยาวกว่าเสมอ</span>
+          </p>
+        </dd>
+      </div>
+      <div class="four-word">
+        <dt>RT <span class="four-word__th">· เวลาตอบสนอง (response time)</span></dt>
+        <dd>
+          <p class="four-word__meaning"><span class="four-word__label">ความหมาย</span>เวลาที่คำขอหนึ่งใช้ไปจนได้คำตอบ k6 วัดไว้ที่ <code>http_req_duration</code></p>
+          <p class="four-word__evidence"><span class="four-word__label">ตัวเลขจากการรันนี้</span>เฉลี่ย <span class="key-figure">54.25</span> ms แต่ p95 <span class="key-figure">74.53</span> ms และ p99 <span class="key-figure">466.29</span> ms ซึ่งสูงกว่าค่าเฉลี่ย <span class="key-figure">8.6</span> เท่า</p>
+          <p class="four-word__trap">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+            <span>ดูค่าเฉลี่ยแล้วสรุปว่าผ่าน ทั้งที่เกณฑ์เขียนด้วย p95 เพราะค่าเฉลี่ยกลบหางยาว</span>
+          </p>
+        </dd>
+      </div>
+      <div class="four-word">
+        <dt>Budget <span class="four-word__th">· เกณฑ์ตัดสิน (เกณฑ์ที่ตกลงไว้ล่วงหน้า)</span></dt>
+        <dd>
+          <p class="four-word__meaning"><span class="four-word__label">ความหมาย</span>ตัวเลขที่ตกลงไว้ก่อนรันว่าอะไรถือว่าผ่าน ทำให้ผลการวัดเปลี่ยนจากคำบรรยายเป็นคำตัดสิน</p>
+          <p class="four-word__evidence"><span class="four-word__label">ตัวเลขจากโปรเจกต์นี้</span><a href="examples.html">สคริปต์ load</a> ตั้งไว้สามข้อ คือ <code>p(95)&lt;500</code>, <code>p(99)&lt;1500</code> และ <code>http_req_failed rate&lt;0.01</code></p>
+          <p class="four-word__trap">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+            <span>รายงานตัวเลขโดยไม่มีเกณฑ์กำกับ — p95 74.53 ms ไม่ได้แปลว่าดีจนกว่าจะเทียบกับเกณฑ์</span>
+          </p>
+        </dd>
+      </div>
+    </dl>
+
+    <p class="four-words__rule">VU สร้างโหลด · RPS คือโหลดที่ส่งจริง · RT คือประสบการณ์ผู้ใช้ · Budget คือคำตัดสิน</p>
+
     <h2 id="reading-path">เส้นทางการอ่าน</h2>
 
     <p>
@@ -392,6 +448,11 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
         <a href="examples.html">หน้าสคริปต์ตัวอย่าง</a> เพื่อยืนยันว่าปลายทางและสคริปต์พร้อมจริง
       </li>
     </ol>
+
+    <p>
+      ลำดับการทำงานจริงของทีม และเช็คลิสต์ที่ควรติ๊กก่อนกดรันทุกครั้ง อยู่ใน
+      <a href="workflow.html">งานจริงของทีม</a>
+    </p>
 
     <div class="callout callout--evidence">
       <div class="callout__head">

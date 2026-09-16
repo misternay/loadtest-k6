@@ -79,24 +79,36 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
         <div class="field">
           <label for="tps-N">จำนวน VU (N) <span class="hint">จำนวนเต็ม ตั้งแต่ 1</span></label>
           <input type="number" id="tps-N" name="N" min="1" step="1" inputmode="numeric" value="10" aria-describedby="err-tps-N">
+          <label class="range-label" for="sl-tps-N">ลากเพื่อปรับจำนวน VU</label>
+          <input type="range" class="range" id="sl-tps-N" min="1" max="500" step="1" value="10" data-unit="VU" aria-valuetext="10 VU">
           <p class="field-error" id="err-tps-N" hidden></p>
         </div>
         <div class="field">
           <label for="tps-R">request ต่อ 1 iteration (R) <span class="hint">จำนวนเต็ม ตั้งแต่ 1</span></label>
           <input type="number" id="tps-R" name="R" min="1" step="1" inputmode="numeric" value="1" aria-describedby="err-tps-R">
+          <label class="range-label" for="sl-tps-R">ลากเพื่อปรับจำนวน request ต่อรอบ</label>
+          <input type="range" class="range" id="sl-tps-R" min="1" max="20" step="1" value="1" data-unit="request ต่อ iteration" aria-valuetext="1 request ต่อ iteration">
           <p class="field-error" id="err-tps-R" hidden></p>
         </div>
         <div class="field">
           <label for="tps-Rt">เวลาตอบสนองเฉลี่ย (Rt) <span class="hint">มิลลิวินาที มากกว่า 0</span></label>
           <input type="number" id="tps-Rt" name="Rt" min="0.01" step="0.01" inputmode="decimal" value="54.25" aria-describedby="err-tps-Rt">
+          <label class="range-label" for="sl-tps-Rt">ลากเพื่อปรับเวลาตอบสนอง</label>
+          <input type="range" class="range" id="sl-tps-Rt" min="0.01" max="1000" step="0.01" value="54.25" data-unit="มิลลิวินาที" aria-valuetext="54.25 มิลลิวินาที">
           <p class="field-error" id="err-tps-Rt" hidden></p>
         </div>
         <div class="field">
           <label for="tps-Tt">think time (Tt) <span class="hint">มิลลิวินาที ใส่ 0 ได้</span></label>
           <input type="number" id="tps-Tt" name="Tt" min="0" step="0.01" inputmode="decimal" value="50" aria-describedby="err-tps-Tt">
+          <label class="range-label" for="sl-tps-Tt">ลากเพื่อปรับ think time</label>
+          <input type="range" class="range" id="sl-tps-Tt" min="0" max="1000" step="0.01" value="50" data-unit="มิลลิวินาที think time" aria-valuetext="50 มิลลิวินาที think time">
           <p class="field-error" id="err-tps-Tt" hidden></p>
         </div>
       </div>
+      <p class="slider-hint">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 10h13.6"/><circle cx="12.6" cy="10" r="2.4"/></svg>
+        ลากเพื่อสำรวจ พิมพ์เพื่อความแม่น
+      </p>
       <div class="btn-row">
         <button class="btn btn--primary" type="submit">คำนวณ</button>
         <button class="btn" type="button" data-example="tps">ใส่ค่าจากการรันจริง</button>
@@ -127,24 +139,36 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
         <div class="field">
           <label for="vu-targetTps">TPS เป้าหมาย <span class="hint">request ต่อวินาที มากกว่า 0</span></label>
           <input type="number" id="vu-targetTps" name="targetTps" min="0.01" step="0.01" inputmode="decimal" value="500" aria-describedby="err-vu-targetTps">
+          <label class="range-label" for="sl-vu-targetTps">ลากเพื่อปรับ TPS เป้าหมาย</label>
+          <input type="range" class="range" id="sl-vu-targetTps" min="1" max="2000" step="0.01" value="500" data-unit="request ต่อวินาที" aria-valuetext="500 request ต่อวินาที">
           <p class="field-error" id="err-vu-targetTps" hidden></p>
         </div>
         <div class="field">
           <label for="vu-R">request ต่อ 1 iteration (R) <span class="hint">จำนวนเต็ม ตั้งแต่ 1</span></label>
           <input type="number" id="vu-R" name="R" min="1" step="1" inputmode="numeric" value="1" aria-describedby="err-vu-R">
+          <label class="range-label" for="sl-vu-R">ลากเพื่อปรับจำนวน request ต่อรอบ</label>
+          <input type="range" class="range" id="sl-vu-R" min="1" max="20" step="1" value="1" data-unit="request ต่อ iteration" aria-valuetext="1 request ต่อ iteration">
           <p class="field-error" id="err-vu-R" hidden></p>
         </div>
         <div class="field">
           <label for="vu-Rt">เวลาตอบสนองเฉลี่ย (Rt) <span class="hint">มิลลิวินาที มากกว่า 0</span></label>
           <input type="number" id="vu-Rt" name="Rt" min="0.01" step="0.01" inputmode="decimal" value="50" aria-describedby="err-vu-Rt">
+          <label class="range-label" for="sl-vu-Rt">ลากเพื่อปรับเวลาตอบสนอง</label>
+          <input type="range" class="range" id="sl-vu-Rt" min="0.01" max="1000" step="0.01" value="50" data-unit="มิลลิวินาที" aria-valuetext="50 มิลลิวินาที">
           <p class="field-error" id="err-vu-Rt" hidden></p>
         </div>
         <div class="field">
           <label for="vu-Tt">think time (Tt) <span class="hint">มิลลิวินาที ใส่ 0 ได้</span></label>
           <input type="number" id="vu-Tt" name="Tt" min="0" step="0.01" inputmode="decimal" value="150" aria-describedby="err-vu-Tt">
+          <label class="range-label" for="sl-vu-Tt">ลากเพื่อปรับ think time</label>
+          <input type="range" class="range" id="sl-vu-Tt" min="0" max="1000" step="0.01" value="150" data-unit="มิลลิวินาที think time" aria-valuetext="150 มิลลิวินาที think time">
           <p class="field-error" id="err-vu-Tt" hidden></p>
         </div>
       </div>
+      <p class="slider-hint">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 10h13.6"/><circle cx="12.6" cy="10" r="2.4"/></svg>
+        ลากเพื่อสำรวจ พิมพ์เพื่อความแม่น
+      </p>
       <div class="btn-row">
         <button class="btn btn--primary" type="submit">คำนวณจำนวน VU</button>
         <button class="btn" type="button" data-example="vu">ใส่ค่าจากตัวอย่างในบทที่ 1</button>
@@ -175,19 +199,29 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
         <div class="field">
           <label for="prof-targetTps">TPS เป้าหมาย <span class="hint">request ต่อวินาที มากกว่า 0</span></label>
           <input type="number" id="prof-targetTps" name="targetTps" min="0.01" step="0.01" inputmode="decimal" value="150" aria-describedby="err-prof-targetTps">
+          <label class="range-label" for="sl-prof-targetTps">ลากเพื่อปรับ TPS เป้าหมาย</label>
+          <input type="range" class="range" id="sl-prof-targetTps" min="1" max="2000" step="0.01" value="150" data-unit="request ต่อวินาที" aria-valuetext="150 request ต่อวินาที">
           <p class="field-error" id="err-prof-targetTps" hidden></p>
         </div>
         <div class="field">
           <label for="prof-p95Ms">เวลาตอบสนอง p95 <span class="hint">มิลลิวินาที มากกว่า 0</span></label>
           <input type="number" id="prof-p95Ms" name="p95Ms" min="0.01" step="0.01" inputmode="decimal" value="180" aria-describedby="err-prof-p95Ms">
+          <label class="range-label" for="sl-prof-p95Ms">ลากเพื่อปรับเวลาตอบสนอง p95</label>
+          <input type="range" class="range" id="sl-prof-p95Ms" min="0.01" max="2000" step="0.01" value="180" data-unit="มิลลิวินาที p95" aria-valuetext="180 มิลลิวินาที p95">
           <p class="field-error" id="err-prof-p95Ms" hidden></p>
         </div>
         <div class="field">
           <label for="prof-Tt">think time (Tt) <span class="hint">มิลลิวินาที ใส่ 0 ได้</span></label>
           <input type="number" id="prof-Tt" name="Tt" min="0" step="0.01" inputmode="decimal" value="60" aria-describedby="err-prof-Tt">
+          <label class="range-label" for="sl-prof-Tt">ลากเพื่อปรับ think time</label>
+          <input type="range" class="range" id="sl-prof-Tt" min="0" max="1000" step="0.01" value="60" data-unit="มิลลิวินาที think time" aria-valuetext="60 มิลลิวินาที think time">
           <p class="field-error" id="err-prof-Tt" hidden></p>
         </div>
       </div>
+      <p class="slider-hint">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 10h13.6"/><circle cx="12.6" cy="10" r="2.4"/></svg>
+        ลากเพื่อสำรวจ พิมพ์เพื่อความแม่น
+      </p>
       <div class="btn-row">
         <button class="btn btn--primary" type="submit">แนะนำรูปแบบการทดสอบ</button>
         <button class="btn" type="button" data-example="profile">ใส่ค่าตัวอย่าง</button>
@@ -221,6 +255,8 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
       <strong>ที่มา:</strong> สูตรทั้งหมดตรงกับที่อธิบายไว้ใน
       <a href="../lessons/01-tps.html">บทที่ 1</a> และค่าตั้งต้นในช่องกรอกเป็นค่าจริงจากการรัน
       k6 v2.2.0 (Rt = 54.25 ms, Tt = 50 ms) ใช้กดปุ่ม "ใส่ค่าจากการรันจริง" เพื่อกลับมาที่ค่านี้ได้เสมอ
+      สไลเดอร์ที่อยู่ข้างช่องกรอกใช้ช่วงค่าที่เหมาะแก่การลากสำรวจ ไม่ใช่ข้อจำกัดของสูตร
+      ค่าที่พิมพ์เกินช่วงสไลเดอร์ยังคำนวณตามปกติ
       โค้ดคำนวณอยู่ในไฟล์ <code>assets/js/calc.js</code> และมีชุดทดสอบที่รันได้ด้วย node
       อยู่ที่ <code>scripts/test-calc.mjs</code>
     </p>
@@ -579,6 +615,68 @@ if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)
       var slot = document.getElementById(slotId);
       if (slot) slot.innerHTML = '';
     }
+
+    /* ---------- สไลเดอร์คู่กับช่องกรอก ----------
+       ลากเพื่อสำรวจ พิมพ์เพื่อความแม่น
+
+       ลากสไลเดอร์  → เขียนค่าลงช่องกรอกแล้วคำนวณใหม่ทันที
+       พิมพ์ในช่อง  → ขยับสไลเดอร์ "เฉพาะเมื่อค่าที่พิมพ์อยู่ในช่วงของสไลเดอร์"
+                      ถ้าค่าว่าง ไม่ใช่ตัวเลข หรืออยู่นอกช่วง สไลเดอร์จะอยู่ที่เดิม
+                      และไม่เขียนค่ากลับลงช่องกรอกเลย ค่าที่ผู้ใช้พิมพ์จึงไม่ถูกแก้เงียบ ๆ
+                      ข้อความเตือนเมื่อค่าเป็น 0 หรือติดลบจึงทำงานเหมือนเดิมทุกกรณี */
+
+    var SLIDER_PAIRS = [
+      ['sl-tps-N', 'tps-N'], ['sl-tps-R', 'tps-R'], ['sl-tps-Rt', 'tps-Rt'], ['sl-tps-Tt', 'tps-Tt'],
+      ['sl-vu-targetTps', 'vu-targetTps'], ['sl-vu-R', 'vu-R'], ['sl-vu-Rt', 'vu-Rt'], ['sl-vu-Tt', 'vu-Tt'],
+      ['sl-prof-targetTps', 'prof-targetTps'], ['sl-prof-p95Ms', 'prof-p95Ms'], ['sl-prof-Tt', 'prof-Tt']
+    ];
+
+    var RUN_BY_PREFIX = { 'tps-': runTps, 'vu-': runVu, 'prof-': runProfile };
+    var mounted = [];
+
+    /* ค่าที่อ่านออกเสียง = ค่าจริง + หน่วยของช่องนั้น (หน่วยเก็บไว้ที่ data-unit ที่เดียว) */
+    function writeValueText(slider) {
+      var unit = slider.getAttribute('data-unit') || '';
+      var value = slider.value;
+      slider.setAttribute('aria-valuetext', value + (unit ? ' ' + unit : ''));
+    }
+
+    function pullFromInput(slider, input) {
+      var raw = input.value;
+      var n = Number(raw);
+      if (raw === '' || !Number.isFinite(n)) return;              /* ว่าง/ไม่ใช่ตัวเลข — ไม่แตะสไลเดอร์ */
+      if (n < Number(slider.min) || n > Number(slider.max)) return; /* นอกช่วง — ไม่แตะสไลเดอร์ */
+      var next = String(n);
+      if (slider.value !== next) slider.value = next;
+      writeValueText(slider);
+    }
+
+    function pullAllSliders() {
+      mounted.forEach(function (m) { pullFromInput(m.slider, m.input); });
+    }
+
+    SLIDER_PAIRS.forEach(function (pair) {
+      var slider = document.getElementById(pair[0]);
+      var input = document.getElementById(pair[1]);
+      if (!slider || !input) return;
+      var run = RUN_BY_PREFIX[pair[1].split('-')[0] + '-'];
+      mounted.push({ slider: slider, input: input });
+      writeValueText(slider);
+      slider.addEventListener('input', function () {
+        input.value = slider.value;
+        if (run) run();
+      });
+    });
+
+    /* พิมพ์ในช่องกรอก ช่องไหนก็ได้ → ขยับสไลเดอร์ที่คู่กัน */
+    [tpsForm, vuForm, profForm].forEach(function (form) {
+      form.addEventListener('input', pullAllSliders);
+      /* ปุ่มล้างค่าและปุ่มใส่ค่าตัวอย่างเขียนค่าลงช่องโดยตรง จึงต้องดึงกลับหลังฟอร์มทำงานเสร็จ */
+      form.addEventListener('reset', function () { window.setTimeout(pullAllSliders, 0); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-example]'), function (btn) {
+      btn.addEventListener('click', function () { window.setTimeout(pullAllSliders, 0); });
+    });
 
     /* คำนวณครั้งแรกให้เห็นผลทันทีเมื่อเปิดหน้า */
     runTps();

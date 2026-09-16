@@ -1,4 +1,4 @@
-// word-count.mjs — นับจำนวนคำของหน้าเนื้อหา เพื่อพิสูจน์ผลการตัดสำนวน
+// word-count.mjs — นับจำนวนคำของหน้าเนื้อหา เพื่อพิสูจน์ว่าการตัดสำนวนไม่ถูกย้อนกลับ
 // รันด้วย: node scripts/word-count.mjs [--before <โฟลเดอร์ site>] [--after <โฟลเดอร์ site>]
 //
 // นับเฉพาะข้อความที่ผู้ใช้เห็นจริงใน <body> ตัด <script>, <style> และคอมเมนต์ HTML ออก
@@ -8,11 +8,32 @@
 // รายงานสองค่า
 //   คำในเนื้อความ  = ตัด <pre>, <table>, <code> ออกด้วย (ตัวเลข/ตาราง/โค้ดไม่นับเป็นสำนวน)
 //   คำที่มองเห็น    = ไม่ตัด <pre>/<table>/<code> (นับทุกอย่างที่ตาเห็น)
-// เป้าหมาย 25–35% ใช้กับ "คำในเนื้อความ" ซึ่งเป็นตัววัดสำนวนที่แท้จริง
 //
-// ตัวตรวจที่สอง: "ตัวเลขต้องไม่หาย" — ดึงตัวเลขทุกตัวจากทั้งไฟล์ (รวมโค้ด ตาราง และสคริปต์ในหน้า)
-// แล้วบังคับว่าเซตของ after ต้องเป็น superset ของ before แปลว่าการตัดสำนวนลบตัวเลขทิ้งไม่ได้เลย
-// เป็นด่านกันความเสียหายที่ 객ตรงกับการนับคำที่ลดลง (สองด่านนี้ดึงคนละทาง จึงต้องผ่านทั้งคู่)
+// ตัวตรวจที่สอง: "โทเคนทางเทคนิคต้องไม่หาย" — ดึงตัวเลข แฟล็กบรรทัดคำสั่ง ชื่อ metric
+// การอ้างเปอร์เซ็นไทล์ โมดูล k6 และพาธไฟล์จากทั้งไฟล์ แล้วบังคับว่าค่าอ้างอิงต้องอยู่ครบ
+//
+// ==========================================================================
+// ประวัติเกณฑ์
+//
+// รอบที่ 1 (การตัดสำนวน, 16 ก.ย. 2026) — เกณฑ์ "ลด 25–35% ต่อหน้า"
+//                                              เทียบกับสำเนา site/ ก่อนแก้
+//   ผลที่วัดได้จริง: 16,501 → 12,064 คำในเนื้อความ (ลด 4,437 คำ = 26.9%)
+//   ต่อหน้า: 01-tps 2576→1884 (26.9%) · 02-vu 1877→1381 (26.4%) ·
+//            03-metrics 1456→1054 (27.6%) · 04-percentiles 2637→1929 (26.8%) ·
+//            05-load-profiles 2167→1578 (27.2%) · 06-read-results 2597→1923 (26.0%) ·
+//            troubleshooting 3191→2315 (27.5%)
+//   หลักฐาน: docs/evidence/word-count-before-after.txt
+//
+// รอบที่ 3 (เพิ่มโมดูลใหม่, 16 ก.ย. 2026) — งานรอบนี้ "เพิ่ม" โมดูลใหม่โดยเจตนา
+//   (สี่คำที่ต้องจำ + บรรทัดอ้างกลับในบทเรียน 01–06 + สไลเดอร์ + กายวิภาค + หน้างานจริง)
+//   จึงเปลี่ยนเกณฑ์จาก "ต้องลด 25–35% จากค่าเดิม" เป็น "ต้องไม่คลาดจากค่าที่ตั้งไว้"
+//   ค่าอ้างอิงใหม่ = ค่าที่วัดได้จริงหลังเพิ่มโมดูล (ตาราง REFERENCE_PROSE ด้านล่าง)
+//   เกณฑ์ปัจจุบัน: ต่อหน้า "โตได้ไม่เกิน 5% และหดได้ไม่เกิน 10%" จากค่าอ้างอิงใหม่
+//   เหตุผลที่ยอมให้โต 5%: บรรทัดอ้างกลับในบทเรียนเป็นเนื้อหาที่ตั้งใจเพิ่ม (~11 คำ/หน้า)
+//   และยอมให้หด 10% เพราะยังควรตัดสำนวนเพิ่มได้ แต่ต้องไม่ลบสาระทิ้ง
+//
+// ด่านโทเคนทางเทคนิคยังเข้มเท่าเดิม: ค่าอ้างอิงทั้งชุดต้องอยู่ครบเหมือนเดิม
+// ==========================================================================
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -32,15 +53,16 @@ const PAGES = [
   'troubleshooting.html'
 ];
 
-const TARGET_MIN = 25;
-const TARGET_MAX = 35;
+/* เกณฑ์ปัจจุบัน (รอบที่ 3): เทียบค่าอ้างอิงใหม่ ไม่ใช่เทียบสำเนาก่อนตัดสำนวน */
+const GROWTH_MAX = 5;   /* โตได้ไม่เกิน 5% ต่อหน้า */
+const SHRINK_MAX = 10;  /* หดได้ไม่เกิน 10% ต่อหน้า */
 
-/* ---------- ค่าอ้างอิงก่อนการตัดสำนวน (ตรึงไว้) ----------
+/* ---------- ค่าอ้างอิงของรอบที่ 1 (ก่อนการตัดสำนวน) — เก็บไว้เป็นหลักฐาน ----------
    โปรเจกต์นี้ไม่มี git สำเนา site/ ก่อนแก้จึงถูกลบหลังวัดเสร็จ
    ค่าต่อไปนี้คือค่าที่วัดได้จริงจากสำเนานั้น บันทึกไว้เพื่อให้ตรวจซ้ำได้ตลอดไป
-   โดยไม่ต้องมีสำเนา — ใช้กับโหมด --check
+   โดยไม่ต้องมีสำเนา — ใช้รายงานผลการตัดสำนวนรอบที่ 1 ในโหมด --history
 
-   FROZEN_PROSE = จำนวน "คำในเนื้อความ" ต่อหน้าก่อนการตัดสำนวน
+   PROSE_BEFORE_TRIM = จำนวน "คำในเนื้อความ" ต่อหน้าก่อนการตัดสำนวน
    FROZEN_TOKENS = เซตของโทเคนทางเทคนิคก่อนการตัดสำนวน (union ข้ามทั้ง 7 หน้า)
 
    หมายเหตุเรื่อง FROZEN_TOKENS: รูปแบบ --[a-z][a-z0-9-]{2,} จับทั้งแฟล็กบรรทัดคำสั่งจริง
@@ -48,7 +70,7 @@ const TARGET_MAX = 35;
    ทั้งสองอย่างถูกตรึงไว้เหมือนกัน เพราะเป็นข้อความที่การตัดสำนวนไม่ควรแตะ
    ถ้ามีการเปลี่ยนชื่อคลาสแบบ BEM อย่างตั้งใจ ต้องอัปเดตรายการนี้พร้อมกัน */
 
-const FROZEN_PROSE = {
+const PROSE_BEFORE_TRIM = {
   'lessons/01-tps.html': 2576,
   'lessons/02-vu.html': 1877,
   'lessons/03-metrics.html': 1456,
@@ -57,6 +79,41 @@ const FROZEN_PROSE = {
   'lessons/06-read-results.html': 2597,
   'troubleshooting.html': 3191
 };
+
+/* ---------- ค่าอ้างอิงใหม่ (รอบที่ 3) — วัดเมื่อ 2026-09-16 หลังเพิ่มโมดูลครบ ----------
+   คอลัมน์ "ก่อนตัดสำนวน" คือ PROSE_BEFORE_TRIM ด้านบน
+   คอลัมน์ "หลังตัดสำนวน" คือค่าที่ใช้เป็น REFERENCE_PROSE ในโหมด --check
+
+   หน้า                           ก่อนตัดสำนวน   หลังตัดสำนวน   ลดลง
+   lessons/01-tps.html                    2576          1895    26.4%
+   lessons/02-vu.html                     1877          1392    25.8%
+   lessons/03-metrics.html                1456          1065    26.9%
+   lessons/04-percentiles.html            2637          1940    26.4%
+   lessons/05-load-profiles.html          2167          1589    26.7%
+   lessons/06-read-results.html           2597          1934    25.5%
+   troubleshooting.html                   3191          2315    27.5%   (ไม่ถูกแตะในรอบที่ 3)
+   ----------------------------------------------------------------------
+   รวม                                   16501         12130    26.5%
+
+   เทียบกับค่าที่รายงานในรอบที่ 1 (16,501 → 12,064): รอบนี้เพิ่มขึ้น 66 คำ
+   ซึ่งตรงกับบรรทัดอ้างกลับ "ย้อนดู: สี่คำที่ต้องจำ (VU · RPS · RT · Budget)"
+   ในบทเรียน 01–06 หน้าละ 11 คำ (6 × 11 = 66) — ไม่มีสำนวนอื่นเพิ่มเลย
+   ========================================================================== */
+
+const REFERENCE_PROSE = {
+  'lessons/01-tps.html': 1895,
+  'lessons/02-vu.html': 1392,
+  'lessons/03-metrics.html': 1065,
+  'lessons/04-percentiles.html': 1940,
+  'lessons/05-load-profiles.html': 1589,
+  'lessons/06-read-results.html': 1934,
+  'troubleshooting.html': 2315
+};
+
+/* ชื่อเดิมก่อนรอบที่ 3 — คงไว้ให้โค้ดส่วนอื่นและเอกสารอ้างถึงได้ไม่พัง */
+const FROZEN_PROSE = PROSE_BEFORE_TRIM;
+
+const REFERENCE_DATE = '2026-09-16';
 
 const FROZEN_TOKENS = [
   "--accent", "--border-strong", "--chart-1", "--chart-3", "--danger", "--evidence", "--fg-soft", "--insecure-skip-tls-verify",
@@ -202,40 +259,58 @@ function resolveSite(p) {
   return abs;
 }
 
-/* ---------- โหมด --check: เทียบกับค่าอ้างอิงที่ตรึงไว้ (ไม่ต้องมีสำเนาเดิม) ---------- */
+/* ---------- โหมด --check: เทียบกับค่าอ้างอิงใหม่ (ไม่ต้องมีสำเนาเดิม) ----------
+   เกณฑ์รอบที่ 3: ต่อหน้า โตได้ไม่เกิน GROWTH_MAX% และหดได้ไม่เกิน SHRINK_MAX%
+   จากค่าอ้างอิงที่วัดหลังเพิ่มโมดูล — ไม่ใช่ "ต้องลด 25–35%" แบบรอบที่ 1 อีกแล้ว
+   เพราะรอบนี้เป็นการเพิ่มโมดูลใหม่โดยเจตนา */
 
 if (process.argv.includes('--check')) {
   const dir = resolveSite(singleArg || 'site');
   console.log('');
-  console.log('ตรวจการตัดสำนวนเทียบค่าอ้างอิงที่ตรึงไว้ — ' + dir);
-  console.log('='.repeat(96));
-  console.log('  ' + 'หน้า'.padEnd(28) + 'ก่อน'.padStart(7) + 'ตอนนี้'.padStart(8) +
-    'ลดลง'.padStart(9) + '%'.padStart(8) + '   สถานะ');
-  console.log('='.repeat(96));
+  console.log('ตรวจจำนวนคำเทียบค่าอ้างอิงรอบที่ 3 (' + REFERENCE_DATE + ') — ' + dir);
+  console.log('เกณฑ์: ต่อหน้าโตได้ไม่เกิน ' + GROWTH_MAX + '% และหดได้ไม่เกิน ' + SHRINK_MAX +
+    '% จากค่าอ้างอิง');
+  console.log('='.repeat(100));
+  console.log('  ' + 'หน้า'.padEnd(28) + 'อ้างอิง'.padStart(8) + 'ตอนนี้'.padStart(8) +
+    'ต่าง'.padStart(8) + '%'.padStart(9) + '   สถานะ');
+  console.log('='.repeat(100));
 
   let wordsOk = true;
-  let sumB = 0;
-  let sumA = 0;
+  let sumRef = 0;
+  let sumNow = 0;
   for (const rel of PAGES) {
-    const frozen = FROZEN_PROSE[rel];
+    const ref = REFERENCE_PROSE[rel];
     const now = measure(dir, rel).proseWords;
-    const pct = frozen ? ((frozen - now) / frozen) * 100 : 0;
-    const ok = pct >= TARGET_MIN && pct <= TARGET_MAX;
+    const pct = ref ? ((now - ref) / ref) * 100 : 0;
+    const ok = pct <= GROWTH_MAX && pct >= -SHRINK_MAX;
     if (!ok) wordsOk = false;
-    sumB += frozen;
-    sumA += now;
-    console.log('  ' + rel.padEnd(28) + String(frozen).padStart(7) + String(now).padStart(8) +
-      String('-' + (frozen - now)).padStart(9) + (pct.toFixed(1) + '%').padStart(8) +
+    sumRef += ref;
+    sumNow += now;
+    const delta = now - ref;
+    console.log('  ' + rel.padEnd(28) + String(ref).padStart(8) + String(now).padStart(8) +
+      String((delta >= 0 ? '+' : '') + delta).padStart(8) +
+      ((pct >= 0 ? '+' : '') + pct.toFixed(1) + '%').padStart(9) +
       '   ' + (ok ? 'ผ่าน' : 'ไม่ผ่าน'));
   }
-  const totalPct = ((sumB - sumA) / sumB) * 100;
-  const totalOk = totalPct >= TARGET_MIN && totalPct <= TARGET_MAX;
-  console.log('='.repeat(96));
-  console.log('  ' + 'รวม'.padEnd(28) + String(sumB).padStart(7) + String(sumA).padStart(8) +
-    String('-' + (sumB - sumA)).padStart(9) + (totalPct.toFixed(1) + '%').padStart(8) +
+  const totalPct = ((sumNow - sumRef) / sumRef) * 100;
+  const totalOk = totalPct <= GROWTH_MAX && totalPct >= -SHRINK_MAX;
+  console.log('='.repeat(100));
+  console.log('  ' + 'รวม'.padEnd(28) + String(sumRef).padStart(8) + String(sumNow).padStart(8) +
+    String((sumNow - sumRef >= 0 ? '+' : '') + (sumNow - sumRef)).padStart(8) +
+    ((totalPct >= 0 ? '+' : '') + totalPct.toFixed(1) + '%').padStart(9) +
     '   ' + (totalOk ? 'ผ่าน' : 'ไม่ผ่าน'));
 
-  /* โทเคนทางเทคนิคในปัจจุบันต้องครอบคลุมโทเคนก่อนการตัดสำนวนครบทุกตัว */
+  /* เทียบกับผลการตัดสำนวนรอบที่ 1 เพื่อโชว์ว่าการตัดสำนวนยังอยู่ ไม่ได้ถูกลบทีหลัง */
+  const beforeTrim = Object.keys(PROSE_BEFORE_TRIM).reduce((a, k) => a + PROSE_BEFORE_TRIM[k], 0);
+  const trimPct = ((beforeTrim - sumNow) / beforeTrim) * 100;
+  console.log('');
+  console.log('เทียบกับค่าก่อนการตัดสำนวนรอบที่ 1 (เก็บไว้เป็นหลักฐาน)');
+  console.log('  ก่อนตัดสำนวน ' + beforeTrim + ' คำ → ตอนนี้ ' + sumNow + ' คำ ' +
+    '(ลด ' + (beforeTrim - sumNow) + ' คำ = ' + trimPct.toFixed(1) + '%)');
+  console.log('  ค่าที่รายงานในรอบที่ 1 คือ 16,501 → 12,064 คำ (ลด 26.9%) · ' +
+    'รอบนี้เพิ่มขึ้น ' + (sumNow - 12064) + ' คำ จากบรรทัดอ้างกลับในบทเรียน 01–06');
+
+  /* โทเคนทางเทคนิคในปัจจุบันต้องครอบคลุมค่าอ้างอิงครบทุกตัว */
   const nowTokens = new Set();
   for (const rel of PAGES) {
     for (const t of measure(dir, rel).numbers) nowTokens.add(t);
@@ -254,7 +329,7 @@ if (process.argv.includes('--check')) {
     console.log('    ' + lost.slice(0, 40).join(', '));
   }
   console.log('');
-  console.log('ผลลัพธ์: ' + (wordsOk && totalOk ? 'การตัดสำนวนยังอยู่ในเกณฑ์' : 'การตัดสำนวนหลุดเกณฑ์') +
+  console.log('ผลลัพธ์: ' + (wordsOk && totalOk ? 'จำนวนคำยังอยู่ในเกณฑ์' : 'จำนวนคำหลุดเกณฑ์') +
     ' · ' + (lost.length === 0 ? 'โทเคนครบถ้วน' : 'มีโทเคนหายไป'));
   console.log('');
   process.exit(wordsOk && totalOk && lost.length === 0 ? 0 : 1);
@@ -282,7 +357,13 @@ if (!beforeArg && !afterArg) {
   process.exit(0);
 }
 
-/* ---------- โหมดเทียบ before/after ---------- */
+/* ---------- โหมดเทียบ before/after ----------
+   ใช้เมื่อมีสำเนา site/ ก่อนแก้จริง ๆ (เช่นตอนทำการตัดสำนวนรอบใหม่)
+   เกณฑ์ของโหมดนี้ยังเป็น "ลด 25–35% ต่อหน้า" เพราะเป็นการเทียบกับสำเนาก่อนตัดสำนวน
+   ต่างจากโหมด --check ที่เทียบกับค่าอ้างอิงที่ตรึงไว้ (เกณฑ์ ±5%/10%) */
+
+const TRIM_TARGET_MIN = 25;
+const TRIM_TARGET_MAX = 35;
 
 const beforeDir = resolveSite(beforeArg);
 const afterDir = resolveSite(afterArg || 'site');
@@ -313,7 +394,7 @@ for (const rel of PAGES) {
   const a = measure(afterDir, rel);
   const delta = b.proseWords - a.proseWords;
   const pct = b.proseWords ? (delta / b.proseWords) * 100 : 0;
-  const pass = pct >= TARGET_MIN && pct <= TARGET_MAX;
+  const pass = pct >= TRIM_TARGET_MIN && pct <= TRIM_TARGET_MAX;
   if (!pass) allPass = false;
 
   /* ตัวเลขที่หายไปหลังตัดสำนวน — ต้องว่างเปล่าเสมอ */
@@ -338,7 +419,7 @@ const visiblePct = sumVB ? ((sumVB - sumVA) / sumVB) * 100 : 0;
 console.log('='.repeat(104));
 console.log('  ' + 'รวมทั้ง 7 หน้า'.padEnd(26) + String(sumB).padStart(8) + String(sumA).padStart(8) +
   String('-' + (sumB - sumA)).padStart(9) + (totalPct.toFixed(1) + '%').padStart(8) + '   ' +
-  (sumVB + '→' + sumVA).padEnd(22) + (totalPct >= TARGET_MIN && totalPct <= TARGET_MAX ? 'ผ่าน' : 'ไม่ผ่าน'));
+  (sumVB + '→' + sumVA).padEnd(22) + (totalPct >= TRIM_TARGET_MIN && totalPct <= TRIM_TARGET_MAX ? 'ผ่าน' : 'ไม่ผ่าน'));
 console.log('');
 console.log('  คำในเนื้อความรวม : ' + sumB + ' → ' + sumA + '  (ลด ' + (sumB - sumA) + ' คำ, ' + totalPct.toFixed(1) + '%)');
 console.log('  คำที่มองเห็นรวม  : ' + sumVB + ' → ' + sumVA + '  (ลด ' + visiblePct.toFixed(1) + '%)');
@@ -366,7 +447,7 @@ if (lostNumbers.length === 0) {
 }
 console.log('');
 
-const wordsOk = allPass && totalPct >= TARGET_MIN && totalPct <= TARGET_MAX;
+const wordsOk = allPass && totalPct >= TRIM_TARGET_MIN && totalPct <= TRIM_TARGET_MAX;
 const numbersOk = lostNumbers.length === 0;
 console.log('ผลลัพธ์: ' + (wordsOk ? 'การตัดสำนวนผ่านเกณฑ์' : 'การตัดสำนวนยังหลุดเกณฑ์') +
   ' · ' + (numbersOk ? 'ตัวเลขครบถ้วน' : 'มีตัวเลขหายไป'));

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>งานจริงของทีม — ลำดับการทำงานและเช็คลิสต์ก่อนกดรัน | Load Testing ด้วย k6</title>
+<meta name="description" content="ลำดับการทำงานจริงของทีมโหลดเทสต์ ตั้งแต่ตั้งคำถามก่อนรัน เตรียมข้อมูลทดสอบ รัน smoke ยืนยันความพร้อม ไปจนถึงบันทึกสามตัวเลขและรีวิว พร้อมเช็คลิสต์ 8 ข้อที่ติ๊กแล้วจำค่าไว้ในเบราว์เซอร์ และความผิดพลาดที่ทำลายผลลัพธ์">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="workflow" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เช็คลิสต์ในหน้านี้ใช้ JavaScript ในการจำค่าไว้ในเบราว์เซอร์ กรุณาเปิด JavaScript เพื่อใช้งาน
+    ลำดับการทำงานและรายการความผิดพลาดอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><circle cx="10" cy="10" r="7.2"/><path d="M6.9 10.2l2.1 2.1 4.1-4.4"/></svg>
+      ใช้งานจริง
+    </p>
+
+    <h1>งานจริงของทีม</h1>
+
+    <p class="lede">
+      บทเรียนทั้งหกอธิบายว่าตัวเลขแต่ละตัวหมายถึงอะไร หน้านี้ตอบอีกคำถามที่ต่างกัน
+      คือ "แล้วลงมือทำตามลำดับไหน" ตั้งแต่การตั้งคำถามก่อนรัน ไปจนถึงการรีวิวผล
+      พร้อมเช็คลิสต์ที่ติ๊กก่อนกดรันทุกครั้ง
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+        ใช้คู่กับบทที่ <a href="lessons/05-load-profiles.html">5</a> และ <a href="lessons/06-read-results.html">6</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ติ๊กแล้วจำค่าไว้ในเบราว์เซอร์ของคุณเท่านั้น
+      </div>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">หน้านี้ต่างจากหน้าแก้ปัญหาอย่างไร</span>
+      </div>
+      <p>
+        หน้านี้พูดถึง <strong>ลำดับการทำงานของคน</strong> ว่าใครทำอะไรก่อน–หลัง
+        ส่วน <a href="troubleshooting.html">แก้ปัญหาที่พบบ่อย</a> พูดถึง
+        <strong>อาการของเครื่องมือ</strong> ว่าเห็นอะไรแล้วสันนิษฐานอะไรต่อ
+      </p>
+    </div>
+
+    <h2 id="workflow">ลำดับการทำงาน 6 ขั้น</h2>
+
+    <p>
+      ขั้นเหล่านี้เรียงตามสิ่งที่ต้องตัดสินใจ ไม่ใช่ตามคำสั่งที่ต้องพิมพ์
+      สองขั้นแรกตัดสินผลของทั้งงาน เพราะเป็นขั้นที่กำหนดว่าตัวเลขที่ได้จะตอบคำถามได้หรือไม่
+    </p>
+
+    <ol class="steps">
+      <li>
+        <strong>ถามก่อนว่าเราอยากเรียนรู้อะไร</strong>
+        เขียนคำถามเป็นประโยคเดียว ระบุตัวเลขที่จะตอบคำถามนั้น และระบุเกณฑ์ที่ถือว่าผ่าน
+        ถ้าตอบสองข้อหลังไม่ได้ ยังไม่ควรเริ่มรัน เพราะจะได้ตัวเลขที่ตัดสินอะไรไม่ได้
+        ตัวเลขสี่ตัวที่ต้องเลือกไว้ตั้งแต่ต้นคือ <a href="index.html#four-words">VU · RPS · RT · Budget</a>
+      </li>
+      <li>
+        <strong>เลือกรูปแบบการทดสอบและกำหนดภาระ</strong>
+        เริ่มที่ smoke เสมอ แล้วจึงไปที่ load ในภาวะเป้าหมาย และใช้
+        <a href="tools/calculator.html">เครื่องคำนวณ</a> หาจำนวน VU ตั้งต้นจาก Rt กับ think time
+        ก่อนรันจริง ตัวช่วยเลือกรูปแบบอยู่ใน<a href="lessons/05-load-profiles.html">บทที่ 5</a>
+      </li>
+      <li>
+        <strong>เตรียมข้อมูลทดสอบให้ไม่ชนกัน</strong>
+        ตัดสินให้ชัดว่าข้อมูลที่สคริปต์สร้างจะอยู่ที่ไหน ใครลบ และลบเมื่อไร
+        ข้อนี้มักถูกข้ามเพราะไม่ใช่เรื่องของ k6 แต่เป็นสาเหตุอันดับต้นที่ทำให้ผลการรันใช้งานไม่ได้
+      </li>
+      <li>
+        <strong>รัน smoke ยืนยันความพร้อม</strong>
+        ใช้เวลา 20 วินาทีกับ 2 VU ตาม<a href="examples.html">สคริปต์ตัวอย่าง</a>
+        ถ้า check ไม่ผ่านทั้งหมด ให้แก้สคริปต์หรือปลายทางก่อน อย่ารันตัวอื่นต่อ
+      </li>
+      <li>
+        <strong>รันจริงที่ภาวะเป้าหมาย และเฝ้าระหว่างทาง</strong>
+        ตัวเลขที่ต้องจับตาคือ p95 กับ <code>http_req_failed</code> ในช่วงภาวะคงตัว
+        ถ้าเห็น p95 ไต่ขึ้นเรื่อย ๆ ระหว่างรัน แปลว่ายังไม่ถึงภาวะคงตัว และการรอจนจบจะไม่ได้ข้อมูลที่มีความหมาย
+      </li>
+      <li>
+        <strong>บันทึกสามตัวเลขและรีวิว</strong>
+        บันทึก RPS, p95 และอัตราความผิดพลาด พร้อมเกณฑ์ที่ใช้ตัดสินและวันที่
+        เก็บไฟล์ผลลัพธ์ไว้เทียบครั้งหน้าเพราะตัวเลขเดียวไม่มีความหมายถ้าไม่มีอะไรเทียบ
+        วิธีอ่านผลและส่งออกอยู่ใน<a href="lessons/06-read-results.html">บทที่ 6</a>
+      </li>
+    </ol>
+
+    <h2 id="checklist">เช็คลิสต์ก่อนกดรัน 8 ข้อ</h2>
+
+    <p>
+      ติ๊กให้ครบก่อนเริ่มรันทุกครั้ง ข้อที่ติ๊กไว้จะถูกจำไว้ในเบราว์เซอร์ของคุณเท่านั้น
+      ไม่มีการส่งข้อมูลออกไปที่ใด ปิดแท็บแล้วเปิดใหม่เครื่องหมายยังอยู่
+    </p>
+
+    <div class="check-progress">
+      <div class="check-progress__bar" id="check-bar" role="progressbar"
+           aria-valuemin="0" aria-valuemax="8" aria-valuenow="0" aria-labelledby="check-count">
+        <span class="check-progress__fill" id="check-fill"></span>
+      </div>
+      <p class="check-progress__count" id="check-count" role="status" aria-live="polite">ติ๊กแล้ว 0/8</p>
+    </div>
+
+    <div id="check-storage-notice"></div>
+
+    <ul class="checklist">
+      <li>
+        <label class="check-item" for="ck-1">
+          <input type="checkbox" id="ck-1" data-check="1">
+          <span class="check-item__text">รู้แล้วว่าจะวัดตัวเลขอะไร และเกณฑ์ผ่านคือเท่าไร</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-2">
+          <input type="checkbox" id="ck-2" data-check="2">
+          <span class="check-item__text">สคริปต์ชี้ไปที่ environment ที่ถูกต้อง ไม่ใช่ production</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-3">
+          <input type="checkbox" id="ck-3" data-check="3">
+          <span class="check-item__text">มีสิทธิ์ทดสอบปลายทางนั้นเป็นลายลักษณ์อักษร</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-4">
+          <input type="checkbox" id="ck-4" data-check="4">
+          <span class="check-item__text">ข้อมูลทดสอบไม่ชนกับข้อมูลจริงหรือข้อมูลของคนอื่น</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-5">
+          <input type="checkbox" id="ck-5" data-check="5">
+          <span class="check-item__text">รัน smoke ผ่านแล้วอย่างน้อยหนึ่งครั้ง</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-6">
+          <input type="checkbox" id="ck-6" data-check="6">
+          <span class="check-item__text">เครื่องที่รัน k6 ยังไม่เป็นคอขวด (CPU และ RAM ว่างพอ)</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-7">
+          <input type="checkbox" id="ck-7" data-check="7">
+          <span class="check-item__text">ปิดงานอื่นที่แย่งทรัพยากรเครื่องทดสอบแล้ว</span>
+        </label>
+      </li>
+      <li>
+        <label class="check-item" for="ck-8">
+          <input type="checkbox" id="ck-8" data-check="8">
+          <span class="check-item__text">เตรียมที่เก็บผลลัพธ์ (summary export หรือ CSV) ไว้ก่อนกดรัน</span>
+        </label>
+      </li>
+    </ul>
+
+    <div class="btn-row">
+      <button class="btn" type="button" id="check-reset">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.2 8.4A6.4 6.4 0 1 0 16 12"/><path d="M16.4 3.9v4.6H12"/></svg>
+        ล้างเครื่องหมายทั้งหมด
+      </button>
+      <span class="check-saved" id="check-saved" role="status" aria-live="polite"></span>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ข้อทั้งแปดมาจากลำดับที่ทีมโหลดเทสต์ใช้กันจริง และสอดคล้องกับ
+      <a href="lessons/05-load-profiles.html">บทที่ 5</a> ที่ว่าด้วยการเลือกรูปแบบการทดสอบกับเกณฑ์ตัดสิน
+      เครื่องหมายถูกเก็บในคีย์ <code>ltk6.checklist.v1</code> ซึ่งแยกจากคีย์ความคืบหน้าของบทเรียน
+      การติ๊กในหน้านี้จึงไม่กระทบจำนวนบทที่อ่านแล้ว
+    </p>
+
+    <h2 id="failures">ความผิดพลาดที่ทำลายผลลัพธ์</h2>
+
+    <p>
+      สามข้อนี้ไม่ได้ทำให้ k6 ขึ้น error แต่ทำให้ตัวเลขที่ได้ไม่ตอบคำถามที่ตั้งไว้
+      จึงเป็นความผิดพลาดที่อันตรายกว่าการรันไม่ผ่าน เพราะดูเหมือนสำเร็จ
+    </p>
+
+    <details class="faq">
+      <summary>1. โหลดปลอมเพราะถอด think time ออก</summary>
+      <div class="faq__body">
+        <div class="faq__row">
+          <span class="faq__tag">เกิดอะไรขึ้น</span>
+          <p>
+            มีคนลบ <code>sleep()</code> ออกจากสคริปต์เพื่อให้ตัวเลข throughput ดูสูงขึ้น
+            หรือเพราะคิดว่า "ผู้ใช้จริงไม่ได้นั่งพัก"
+          </p>
+        </div>
+        <div class="faq__row">
+          <span class="faq__tag">ทำไมผลลัพธ์จึงเสีย</span>
+          <p>
+            VU จะยิง request ต่อเนื่องไม่หยุด ตัวเลข RPS สูงขึ้นทันทีโดยที่เซิร์ฟเวอร์ไม่ได้เร็วขึ้นเลย
+            และผลที่ได้ไม่ตรงกับพฤติกรรมผู้ใช้จริง ที่ Rt 54.25 ms สูตรให้ 9.59 คำขอต่อวินาที
+            เมื่อ think time 50 ms และ 18.43 เมื่อ think time 0 — เกือบเท่าตัวทันที
+          </p>
+        </div>
+        <div class="faq__row">
+          <span class="faq__tag">ทำอย่างไรไม่ให้เกิด</span>
+          <ul>
+            <li>เก็บ <code>sleep()</code> ไว้เสมอ และเอกสารกำกับว่าค่าไหนคือ think time ของระบบนี้</li>
+            <li>ตรวจว่า <code>iteration_duration</code> ตรงกับ <code>(R × Rt) + Tt</code> ตาม<a href="lessons/01-tps.html">บทที่ 1</a></li>
+            <li>ถ้าต้องการวัดเพดานของระบบจริง ๆ ให้ใช้ stress test ไม่ใช่การถอด think time ออก</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>2. ข้อมูลทดสอบชนกันเอง</summary>
+      <div class="faq__body">
+        <div class="faq__row">
+          <span class="faq__tag">เกิดอะไรขึ้น</span>
+          <p>
+            สคริปต์หลายตัว หรือหลายรอบที่รันซ้อนกัน ใช้ข้อมูลชุดเดียวกัน
+            เช่นสร้างออร์เดอร์จากสินค้าตัวเดียวกัน หรือลบรายการที่อีกรอบกำลังอ่านอยู่
+          </p>
+        </div>
+        <div class="faq__row">
+          <span class="faq__tag">ทำไมผลลัพธ์จึงเสีย</span>
+          <p>
+            คำขอที่ควรสำเร็จกลายเป็น 404 หรือ 409 ทำให้ <code>http_req_failed</code> สูงขึ้น
+            ทั้งที่ระบบไม่มีปัญหา และ RT สูงขึ้นเพราะต้องรอ lock หรือ retry
+            ตัวเลขที่ได้จึงเป็นตัวเลขของปัญหาข้อมูล ไม่ใช่ของสมรรถนะระบบ
+          </p>
+        </div>
+        <div class="faq__row">
+          <span class="faq__tag">ทำอย่างไรไม่ให้เกิด</span>
+          <ul>
+            <li>กำหนดขอบเขตข้อมูลต่อการรัน เช่นเติมรหัสรันนำหน้าทุกรายการที่สร้าง</li>
+            <li>ให้แต่ละรอบเก็บกวาดข้อมูลของตัวเอง และไม่แตะข้อมูลของรอบอื่น</li>
+            <li>ถ้าล้างไม่ได้ ให้ใช้ปลายทางคนละชุดหรือคีย์ข้อมูลคนละช่วง</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>3. ยิงผิด environment</summary>
+      <div class="faq__body">
+        <div class="faq__row">
+          <span class="faq__tag">เกิดอะไรขึ้น</span>
+          <p>
+            ตั้ง <code>BASE_URL</code> พลาด หรือลืมตั้งจนสคริปต์ใช้ค่าเริ่มต้น
+            แล้วการรันวิ่งไปที่ระบบที่ผู้ใช้จริงใช้งานอยู่
+          </p>
+        </div>
+        <div class="faq__row">
+          <span class="faq__tag">ทำไมผลลัพธ์จึงเสีย</span>
+          <p>
+            ตัวเลขที่ได้ไม่ใช่ตัวเลขของระบบที่ตั้งใจวัด จึงเทียบกับครั้งก่อนหน้าไม่ได้
+            และความเสียหายที่หนักกว่าคือการสร้างโหลดจริงใส่ผู้ใช้จริง
+            ซึ่งเข้าข่ายรบกวนระบบของผู้อื่น
+          </p>
+        </div>
+        <div class="faq__row">
+          <span class="faq__tag">ทำอย่างไรไม่ให้เกิด</span>
+          <ul>
+            <li>ให้สคริปต์ปฏิเสธปลายทางที่ไม่อยู่ในรายการอนุญาต ตามแบบ <code>ALLOWED_HOSTS</code> ใน <a href="examples.html">สคริปต์ตัวอย่าง</a></li>
+            <li>ตรวจชื่อโฮสต์บนหน้าจอก่อนกดรันทุกครั้ง ไม่ใช่ตรวจในหัว</li>
+            <li>ใช้ตัวแปรสภาพแวดล้อมที่มีคำนำหน้าเฉพาะโปรเจกต์ เพื่อไม่ให้ชนกับตัวแปรของระบบ</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <h2 id="next">ขั้นต่อไป</h2>
+
+    <ul>
+      <li>เริ่มจาก<a href="lessons/05-load-profiles.html">บทที่ 5</a> เพื่อเลือกค่ารูปแบบการทดสอบและเกณฑ์ตัดสิน</li>
+      <li>เปิด<a href="tools/calculator.html">เครื่องคำนวณ</a> เพื่อหาจำนวน VU ตั้งต้นจาก Rt กับ think time</li>
+      <li>ใช้<a href="examples.html">สคริปต์ตัวอย่าง</a> ที่มีด่านตรวจปลายทางอยู่แล้ว เป็นจุดเริ่มของสคริปต์ใหม่</li>
+      <li>เมื่อรันไม่ผ่าน ให้เทียบอาการกับ<a href="troubleshooting.html">แก้ปัญหาที่พบบ่อย</a></li>
+    </ul>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ==========================================================================
+     เช็คลิสต์ก่อนกดรัน — เก็บในคีย์ของตัวเอง (ltk6.checklist.v1)
+
+     แยกจาก ltk6.progress.v1 โดยเจตนา เพราะสองอย่างนี้คนละเรื่องกัน
+     การติ๊กเช็คลิสต์จึงไม่กระทบจำนวนบทที่อ่านแล้วและคะแนนแบบทดสอบ
+
+     ถ้า localStorage ใช้ไม่ได้ (โหมดส่วนตัว/ปิดคุกกี้) หน้าเว็บต้องไม่ค้าง
+     กล่องยังติ๊กได้ตามปกติ แต่ค่าจะหายเมื่อปิดแท็บ และมีข้อความบอกผู้ใช้อย่างสุภาพ
+     ========================================================================== */
+
+  var KEY = 'ltk6.checklist.v1';
+  var VERSION = 1;
+  var TOTAL = 8;
+
+  function probe() {
+    try {
+      if (typeof localStorage === 'undefined' || localStorage === null) {
+        return { ok: false, reason: 'localStorage ไม่พร้อมใช้งานในเบราว์เซอร์นี้' };
+      }
+      var k = KEY + '.probe';
+      localStorage.setItem(k, '1');
+      localStorage.removeItem(k);
+      return { ok: true, reason: '' };
+    } catch (err) {
+      return {
+        ok: false,
+        reason: 'เบราว์เซอร์ปิดกั้นการบันทึกข้อมูล (โหมดไม่ระบุตัวตน/ส่วนตัว หรือปิดคุกกี้)'
+      };
+    }
+  }
+
+  var store = probe();
+  var checked = {};
+
+  function load() {
+    if (!store.ok) return;
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || parsed.version !== VERSION) return;
+      var src = parsed.checked;
+      if (!src || typeof src !== 'object') return;
+      for (var i = 1; i <= TOTAL; i++) {
+        if (src[String(i)] === true) checked[String(i)] = true;
+      }
+    } catch (err) {
+      /* ข้อมูลที่บันทึกไว้เสียหาย — เริ่มใหม่จากศูนย์โดยไม่ทำให้หน้าพัง */
+      checked = {};
+    }
+  }
+
+  function save() {
+    if (!store.ok) return false;
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ version: VERSION, checked: checked }));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  load();
+
+  function items() {
+    return Array.prototype.slice.call(document.querySelectorAll('#main .checklist input[type="checkbox"]'));
+  }
+
+  function count() {
+    return Object.keys(checked).length;
+  }
+
+  function render() {
+    var boxes = items();
+    boxes.forEach(function (box) {
+      var key = box.getAttribute('data-check');
+      var on = checked[key] === true;
+      box.checked = on;
+      var label = box.closest('.check-item');
+      if (label) label.classList.toggle('is-done', on);
+    });
+
+    var done = count();
+    var countEl = document.getElementById('check-count');
+    if (countEl) countEl.textContent = 'ติ๊กแล้ว ' + done + '/' + TOTAL;
+    var fill = document.getElementById('check-fill');
+    if (fill) fill.style.width = ((done / TOTAL) * 100).toFixed(1) + '%';
+    var bar = document.getElementById('check-bar');
+    if (bar) bar.setAttribute('aria-valuenow', String(done));
+  }
+
+  function notice() {
+    if (store.ok) return;
+    var host = document.getElementById('check-storage-notice');
+    if (!host || host.querySelector('.storage-notice')) return;
+    host.innerHTML =
+      '<div class="callout callout--warn storage-notice">' +
+      '<div class="callout__head">' +
+      '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>' +
+      '<span class="label">จำเครื่องหมายไว้ไม่ได้</span></div>' +
+      '<p>เบราว์เซอร์นี้ไม่อนุญาตให้เว็บไซต์เก็บข้อมูลไว้ในเครื่องคุณ (' + store.reason + ') ' +
+      'คุณยังติ๊กเช็คลิสต์และอ่านหน้านี้ได้ตามปกติ แต่เครื่องหมายจะหายไปเมื่อปิดแท็บ</p>' +
+      '<p>วิธีแก้: เปิดโหมดปกติ (ไม่ใช่หน้าต่างส่วนตัว) หรืออนุญาตคุกกี้/ที่เก็บข้อมูลไซต์สำหรับหน้านี้</p>' +
+      '</div>';
+  }
+
+  function flash(text) {
+    var el = document.getElementById('check-saved');
+    if (!el) return;
+    el.textContent = text;
+    window.setTimeout(function () {
+      if (el.textContent === text) el.textContent = '';
+    }, 2400);
+  }
+
+  document.addEventListener('ltk6:ready', function () {
+    items().forEach(function (box) {
+      box.addEventListener('change', function () {
+        var key = box.getAttribute('data-check');
+        if (box.checked) checked[key] = true;
+        else delete checked[key];
+        /* บันทึกไม่ได้ก็ยังติ๊กต่อได้ — แค่ไม่ถูกจำ */
+        save();
+        render();
+        if (!store.ok) flash('ติ๊กแล้วแต่ยังบันทึกไว้ไม่ได้');
+      });
+    });
+
+    var resetBtn = document.getElementById('check-reset');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        /* ถามก่อนเสมอ — ล้างแล้วเรียกคืนไม่ได้ */
+        var ok = window.confirm(
+          'ล้างเครื่องหมายทั้ง ' + TOTAL + ' ข้อ?\n\n' +
+          'เครื่องหมายที่ติ๊กไว้จะหายทั้งหมด และเรียกคืนไม่ได้'
+        );
+        if (!ok) return;
+        checked = {};
+        if (store.ok) {
+          try { localStorage.removeItem(KEY); } catch (err) { /* ไม่มีอะไรต้องทำ */ }
+        }
+        render();
+        flash(store.ok ? 'ล้างเครื่องหมายแล้ว' : 'ล้างในหน่วยความจำแล้ว (ไม่ได้บันทึกไว้ตั้งแต่แรก)');
+      });
+    }
+
+    render();
+    notice();
+  });
+})();
+</script>
+
+</body>
+</html>

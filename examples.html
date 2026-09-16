@@ -151,6 +151,72 @@ curl -i http://localhost:8080/api/items
       </table>
     </div>
 
+    <h2 id="anatomy">กายวิภาคของสคริปต์ k6</h2>
+
+    <p>
+      สคริปต์ที่แสดงด้านล่างคือ <code>examples/load.js</code> ตัวเดียวกับที่อยู่ในรายการทั้งห้า
+      ดึงไฟล์จริงมาแสดงแล้วติดหมายเลข ①–⑨ ไว้ที่ต้นบรรทัด สคริปต์นี้จึงรันได้จริงตามที่เป็น
+      และคำอธิบายแต่ละหมายเลขอยู่ใต้โค้ด บอกว่าเหตุใดบรรทัดนั้นจึงต้องมี ไม่ใช่แค่ว่ามันคืออะไร
+    </p>
+
+    <div id="anatomy-block">
+      <p class="panel--empty" id="anatomy-state" role="status" aria-live="polite">กำลังอ่านไฟล์ examples/load.js</p>
+    </div>
+
+    <ol class="anatomy-list">
+      <li>
+        <span class="anatomy-mark">①</span><span class="anatomy-list__term">บรรทัด import</span> —
+        k6 รันสคริปต์เป็นโมดูล จึงต้องประกาศว่าใช้ฟังก์ชันจากโมดูลใด การอ่านรายการนี้บอกได้ทันทีว่าสคริปต์แตะอะไรได้บ้าง
+        และทำให้ตรวจสคริปต์ได้ก่อนรัน โดยยังไม่ต้องยิงคำขอออกไปแม้แต่คำขอเดียว
+      </li>
+      <li>
+        <span class="anatomy-mark">②</span><span class="anatomy-list__term">ค่าตั้งต้นจาก <code>__ENV</code></span> —
+        ปลายทางและจำนวน VU ต้องเปลี่ยนได้โดยไม่แก้ไฟล์ มิฉะนั้นสคริปต์เดียวจะใช้ได้กับสภาพแวดล้อมเดียว
+        k6 มองเห็นตัวแปรสภาพแวดล้อมของเชลล์ทั้งหมดผ่าน <code>__ENV</code> และค่าเริ่มต้นชี้ที่ localhost
+        เพื่อไม่ให้เผลอยิงออกอินเทอร์เน็ต
+      </li>
+      <li>
+        <span class="anatomy-mark">③</span><span class="anatomy-list__term">ด่านตรวจปลายทาง</span> —
+        ฟังก์ชันนี้ทำงานตอนโหลดสคริปต์ ก่อนสร้าง VU ตัวแรก ถ้าปลายทางไม่อยู่ในรายการที่อนุญาตจะหยุดทันทีโดยไม่เกิดโหลด
+        เป็นการกันความผิดพลาดที่แพงที่สุด คือการยิงโหลดใส่ระบบของคนอื่น
+      </li>
+      <li>
+        <span class="anatomy-mark">④</span><span class="anatomy-list__term">metric ที่กำหนดเอง</span> —
+        <code>Trend</code> เก็บการกระจายของค่าที่เราสนใจ ส่วน <code>Rate</code> เก็บสัดส่วน
+        ทั้งสองเป็น metric ที่ k6 ไม่รู้จักเอง จึงจำเป็นเมื่อคำถามไม่ใช่ "HTTP เร็วไหม" แต่เป็น "ขั้นตอนของเราช้าไหม"
+        และทำให้ตั้ง threshold เฉพาะทางได้ ซึ่งอธิบายไว้ใน<a href="lessons/03-metrics.html">บทที่ 3</a>
+      </li>
+      <li>
+        <span class="anatomy-mark">⑤</span><span class="anatomy-list__term">options คือ load model</span> —
+        ทั้งก้อนนี้คือรูปของการทดสอบ เริ่มที่ 0 VU ไต่ขึ้นเป็นขั้น ถึง 10 VU แล้วถือไว้ 8 นาที ก่อนลดลง
+        เหตุผลที่ต้องไต่ขึ้นคือ cache และ connection pool ต้องมีเวลาอุ่นเครื่อง ไม่งั้นช่วงนาทีแรก
+        จะสะท้อนสภาพระบบที่ยังไม่พร้อม วิธีเลือกรูปแบบอยู่ใน<a href="lessons/05-load-profiles.html">บทที่ 5</a>
+      </li>
+      <li>
+        <span class="anatomy-mark">⑥</span><span class="anatomy-list__term">threshold คือเกณฑ์ตัดสิน</span> —
+        ที่นี่ที่เดียวที่ SLO กลายเป็นเกณฑ์ที่ตัดสินได้ ตัวเลข <code>p(95)&lt;500</code> ไม่ได้เปลี่ยนวิธีที่ k6 วัด
+        แต่เปลี่ยนว่าการรันนี้ผ่านหรือไม่ผ่าน คู่กับ <code>abortOnFail</code> และ <code>delayAbortEval</code>
+        เพื่อให้หยุดเองเมื่อแย่เกินเกณฑ์ โดยไม่ถูกตัดจบตั้งแต่ช่วงไต่ขึ้น
+      </li>
+      <li>
+        <span class="anatomy-mark">⑦</span><span class="anatomy-list__term">VU รัน <code>default()</code> เป็นลูป</span> —
+        นี่คืองานที่ VU แต่ละตัวทำซ้ำ k6 เรียกฟังก์ชันนี้ใหม่ทันทีที่รอบก่อนจบ
+        จำนวนรอบต่อวินาทีจึงขึ้นกับว่าในฟังก์ชันนี้ใช้เวลาไปเท่าไร ไม่ได้ขึ้นกับจำนวน VU เพียงอย่างเดียว
+      </li>
+      <li>
+        <span class="anatomy-mark">⑧</span><span class="anatomy-list__term"><code>check</code> ไม่ใช่ threshold</span> —
+        <code>check</code> ตอบว่า "คำตอบตรงตามที่คาดไหม" แล้วบันทึกผลลง metric <code>checks</code>
+        แต่ไม่ทำให้การรันล้มเหลว ต่างจาก threshold ที่ตัดสินผ่านหรือไม่ผ่าน
+        การมี check จึงยังไม่พอถ้าไม่มีเกณฑ์มาบังคับ
+      </li>
+      <li>
+        <span class="anatomy-mark">⑨</span><span class="anatomy-list__term"><code>sleep</code> คือ think time</span> —
+        เลียนแบบผู้ใช้ที่อ่านข้อมูลก่อนกดอะไรต่อไป และถูกนับรวมใน <code>iteration_duration</code>
+        ถ้าถอดบรรทัดนี้ออก ตัวเลข throughput จะสูงขึ้นทันทีโดยที่เซิร์ฟเวอร์ไม่ได้เร็วขึ้นเลย
+        ซึ่งเป็นวิธีสร้าง "โหลดปลอม" ที่พบบ่อยที่สุด
+      </li>
+    </ol>
+
     <div id="load-state" class="panel--empty" role="status" aria-live="polite">
       กำลังอ่านไฟล์สคริปต์
     </div>
@@ -375,6 +441,78 @@ docker run --rm -i -v "$PWD:/work" -w /work grafana/k6 run \
     var ctx = window.LTK6.__ctx;
     var copyButton = window.LTK6.copyButton;
     if (!ctx) return;
+
+    /* ---------- กายวิภาคของสคริปต์ k6 ----------
+       ดึงไฟล์ examples/load.js จริงมาแสดง แล้วแทรกเครื่องหมายที่ "ต้นบรรทัด"
+       เมื่อถอด <span class="anatomy-mark"> ออก ข้อความที่เหลือจะตรงกับไฟล์จริงทุกไบต์
+       โค้ดที่แสดงจึงเป็นสคริปต์ที่รันได้จริงเสมอ และไม่มีสำเนาที่เพี้ยนจากต้นฉบับได้
+
+       ทุกหมายเลขผูกกับ "บรรทัด" และ "ข้อความที่ต้องพบบนบรรทัดนั้น" ถ้ามีคนแก้ load.js
+       จนบรรทัดเลื่อน ด่านนี้จะฟ้องทันทีที่เปิดหน้า แทนที่จะชี้ผิดอย่างเงียบ ๆ */
+
+    var ANATOMY = [
+      { mark: '①', line: 14, anchor: 'import http from' },
+      { mark: '②', line: 18, anchor: 'const BASE_URL' },
+      { mark: '③', line: 24, anchor: 'const ALLOWED_HOSTS' },
+      { mark: '④', line: 37, anchor: 'const listDuration' },
+      { mark: '⑤', line: 40, anchor: 'export const options' },
+      { mark: '⑥', line: 55, anchor: 'thresholds: {' },
+      { mark: '⑦', line: 72, anchor: 'export default function' },
+      { mark: '⑧', line: 80, anchor: 'const ok = check(res' },
+      { mark: '⑨', line: 89, anchor: 'sleep(1);' }
+    ];
+
+    var anatomyHost = document.getElementById('anatomy-block');
+
+    function anatomyFail(message) {
+      anatomyHost.className = 'callout callout--warn';
+      anatomyHost.innerHTML =
+        '<div class="callout__head">' +
+        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>' +
+        '<span class="label">แสดงกายวิภาคของสคริปต์ไม่ได้</span></div>' +
+        '<p>' + esc(message) + '</p>' +
+        '<p><strong>วิธีแก้:</strong> หน้านี้ต้องเปิดผ่านเว็บเซิร์ฟเวอร์ ไม่ใช่เปิดไฟล์ตรง ๆ ด้วย file:// ' +
+        'ให้รัน <code>python3 -m http.server</code> ในโฟลเดอร์ site แล้วเปิดผ่าน http://localhost</p>';
+    }
+
+    fetch(ctx.root + 'examples/load.js', { cache: 'no-cache' }).then(function (res) {
+      if (!res.ok) throw new Error('examples/load.js — HTTP ' + res.status);
+      return res.text();
+    }).then(function (code) {
+      var lines = code.split('\n');
+      var byLine = {};
+      ANATOMY.forEach(function (a, i) {
+        var text = lines[a.line - 1];
+        if (text === undefined || text.indexOf(a.anchor) === -1) {
+          throw new Error('หมายเลข ' + (i + 1) + ' (' + a.mark + ') ชี้บรรทัดที่ ' + a.line +
+            ' ซึ่งไม่ตรงกับ ' + JSON.stringify(a.anchor) + ' — ไฟล์ load.js ถูกแก้ให้บรรทัดเลื่อนไปแล้ว');
+        }
+        byLine[a.line] = a.mark;
+      });
+
+      var body = lines.map(function (text, i) {
+        var mark = byLine[i + 1];
+        return (mark ? '<span class="anatomy-mark">' + mark + '</span>' : '') + esc(text);
+      }).join('\n');
+
+      anatomyHost.className = '';
+      anatomyHost.innerHTML =
+        '<div class="code-block">' +
+          '<div class="code-block__head">' +
+            '<span class="code-block__title">examples/load.js — ' + ANATOMY.length +
+            ' จุดที่ต้องอ่าน (รันได้จริงตามที่เป็น)</span>' +
+          '</div>' +
+          '<pre><code>' + body + '</code></pre>' +
+        '</div>';
+
+      /* ปุ่มคัดลอกได้ข้อความไฟล์จริง ไม่มีเครื่องหมาย จึงเอาไปรันได้ทันที */
+      var head = anatomyHost.querySelector('.code-block__head');
+      if (head && copyButton && !head.querySelector('.copy-btn')) {
+        head.appendChild(copyButton(function () { return code; }, 'คัดลอกโค้ด'));
+      }
+    }).catch(function (err) {
+      anatomyFail(err.message);
+    });
 
     var host = document.getElementById('scripts-host');
     var stateEl = document.getElementById('load-state');
