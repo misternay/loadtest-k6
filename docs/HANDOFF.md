@@ -3,6 +3,12 @@
 **วันที่ส่งมอบ: 16 กันยายน 2026**
 **โปรเจกต์: `loadtest-k6` — เว็บไซต์บทเรียน load testing ด้วย k6 ภาษาไทย**
 
+| ทางเข้าใช้งาน | ที่อยู่ |
+|---|---|
+| GitHub Pages (หลัก) | https://misternay.github.io/loadtest-k6/ |
+| GitHub repo | https://github.com/misternay/loadtest-k6 |
+| พรีวิวระบบเดิม (Function Compute) | https://k2pjaayi.autoclawai.space/ |
+
 ---
 
 ## 0. สถานะสรุป ณ วันส่งมอบ

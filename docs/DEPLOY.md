@@ -398,3 +398,76 @@ echo "$(date -Iseconds) rollback กลับไป site-20260916-143000 เห�
 - ลิงก์ภายนอกในเว็บยังไม่เคยถูกตรวจว่ายังเปิดได้จริงด้วยเครื่อง
   (ตอนนี้ `verify-site.mjs` ตรวจแค่ว่าชี้ไปโดเมนของ k6 เท่านั้น
   วิธีตรวจด้วยมืออยู่ใน `REFERENCES.md` หัวข้อ 7)
+
+
+---
+
+## การ deploy ขึ้น GitHub Pages (เพิ่มเมื่อ 16 กันยายน 2026)
+
+เว็บนี้ถูก deploy ขึ้น GitHub Pages เรียบร้อยแล้ว
+
+| รายการ | ค่า |
+|---|---|
+| GitHub repo | https://github.com/misternay/loadtest-k6 (public) |
+| หน้าเว็บ (GitHub Pages) | https://misternay.github.io/loadtest-k6/ |
+| สาขา / โฟลเดอร์ที่เผยแพร่ | `main` · path `/` (ราก repo) |
+| ไฟล์กำกับ | `.nojekyll` ที่ราก repo (ปิดการประมวลผลด้วย Jekyll) |
+
+### โครงสร้าง repo ที่เผยแพร่
+
+โฟลเดอร์ `site/` ในเครื่องถูกยกเนื้อหาขึ้นเป็น **รากของ repo** เพื่อให้ Pages เสิร์ฟได้ทันที
+ส่วนไฟล์ประกอบอยู่ในโฟลเดอร์ย่อย:
+
+```text
+/                     ← เนื้อหาเว็บทั้งหมด (index.html, lessons/, tools/, assets/, examples/, favicon.svg)
+/k6/                  ← สคริปต์ k6 ต้นฉบับ
+/mock-server/         ← ปลายทางจำลองสำหรับฝึก
+/scripts/             ← ชุดตรวจอัตโนมัติ (test-calc, verify-site, browser-check, word-count)
+/docs/                ← เอกสารส่งมอบและหลักฐาน
+/README.md, /serve.mjs
+```
+
+ลิงก์ภายในเว็บเป็นพาธสัมพันธ์ทั้งหมด จึงทำงานได้ทั้งที่รากโดเมนและใต้พาธย่อย `/loadtest-k6/`
+
+### วิธีอัปเดตบทเรียนในอนาคต
+
+1. แก้ไฟล์ในโฟลเดอร์ `site/` ของโปรเจกต์ในเครื่อง (ดูหัวข้อ 4 ด้านบน)
+2. รันชุดตรวจให้ผ่านก่อนทุกครั้ง
+
+```bash
+node scripts/verify-site.mjs
+node scripts/browser-check.mjs
+node scripts/word-count.mjs --check
+```
+
+3. คัดลอกเนื้อหา `site/` ไปทับราก repo แล้ว commit + push ขึ้นสาขา `main`
+
+```bash
+cp -R site/. <โฟลเดอร์ repo>/
+cd <โฟลเดอร์ repo>
+git add -A && git commit -m "ปรับปรุงบทเรียน: <สรุป>" && git push origin main
+```
+
+4. GitHub Pages จะ build ใหม่ภายในราว 1 นาที ตรวจสถานะได้ด้วย `gh api repos/misternay/loadtest-k6/pages --jq .status`
+
+### วิธี rollback GitHub Pages
+
+**กรณีต้องการย้อนทั้งเว็บ** — ย้อน commit แล้ว push
+
+```bash
+git revert <commit ที่ต้องการย้อน> --no-edit
+git push origin main
+```
+
+**กรณีต้องการย้อนเร็วกว่าการแก้ไฟล์** — checkout ไฟล์จาก commit เก่าแล้ว push
+
+```bash
+git checkout <commit เก่า> -- .
+git commit -m "ย้อนเว็บกลับเวอร์ชัน <commit เก่า>"
+git push origin main
+```
+
+**กรณีฉุกเฉิน (เว็บพัง ต้องหยุดให้บริการทันที)** — ปิด Pages ชั่วคราวได้ที่
+`Settings → Pages → Source: None` แล้วเปิดกลับเมื่อแก้เสร็จ
+
+หลัง push ทุกครั้ง ให้รอสถานะ `built` แล้วเปิด https://misternay.github.io/loadtest-k6/ ตรวจอีกครั้งว่าไม่มี console error และไม่ล้นแนวนอนที่ความกว้าง 360px
