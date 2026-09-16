@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บทที่ 4 — เปอร์เซ็นไทล์ p95 / p99 | Load Testing ด้วย k6</title>
+<meta name="description" content="วิธีคำนวณเปอร์เซ็นไทล์ทีละขั้น พร้อมกราฟฮิสโตแกรมและเส้น CDF จากข้อมูล latency จริง 1,155 ค่า ที่แสดงให้เห็นว่าค่าเฉลี่ยกลบหางของการกระจายอย่างไร">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="04-percentiles" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูนำทางและสารบัญในหน้านี้สร้างด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งานเมนู
+    กราฟทั้งสองในหน้านี้ต้องใช้ JavaScript ในการวาด
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+      บทที่ 4 จาก 6
+    </p>
+
+    <h1>เปอร์เซ็นไทล์ — ทำไมค่าเฉลี่ยที่ดูดีถึงซ่อนปัญหาไว้ได้</h1>
+
+    <p class="lede">
+      การรันของเราให้ค่าเฉลี่ย 54.25 ms ซึ่งดูปกติดี แต่มีคำขอจำนวนหนึ่งที่ใช้เวลาเกิน 466 ms
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ใช้เวลาอ่านประมาณ 17 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ต้องอ่านก่อน: <a href="03-metrics.html">บทที่ 3</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5"/><path d="M12.6 12.6l3.6 3.6"/></svg>
+        ข้อมูล: 1,155 ค่าจริง
+      </div>
+    </div>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>ค่าเฉลี่ย 54.25 ms ดูปกติ แต่ p99 466.29 ms สูงกว่าถึง 8.6 เท่า เพราะหางยาวดึงค่าเฉลี่ยขึ้น ขณะที่ p50 44.40 ms ไม่ขยับตาม</li>
+        <li>เปอร์เซ็นไทล์หาได้จากตำแหน่ง p × (n − 1) แล้วเทียบสัดส่วนระหว่างสองค่าที่อยู่ติดกัน</li>
+        <li>p95 74.53 ms แปลว่า 5% ของคำขอ หรือประมาณ 58 คำขอจาก 1,155 ยังช้ากว่านั้น และถ้าหนึ่งหน้ายิง 20 คำขอ โอกาสเจอคำขอที่ช้าคือราว 64%</li>
+        <li>ตั้ง threshold ด้วย p(95)&lt;500 ส่วน max ใช้เป็นเบาะแส ไม่ใช่เกณฑ์ผ่านหรือไม่ผ่าน</li>
+      </ol>
+    </div>
+
+    <h2 id="why">ปัญหา: ค่าเฉลี่ยตอบคำถามผิดข้อ</h2>
+
+    <p>
+      ค่าเฉลี่ยบอกว่าคำขอหนึ่งตัวใช้เวลาเฉลี่ยเท่าไร แต่คำถามของผู้ใช้คือ
+      "ฉันจะได้รอนานผิดปกติไหม" — เรื่องของหางการกระจาย ไม่ใช่จุดกลาง
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>สถิติของ http_req_duration จากข้อมูลจริง 1,155 ค่า</caption>
+        <thead>
+          <tr>
+            <th>สถิติ</th>
+            <th class="num">ค่า (ms)</th>
+            <th class="num">เทียบกับค่าเฉลี่ย</th>
+            <th class="wrap">บอกอะไร</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">min</td>
+            <td class="num">4.21</td>
+            <td class="num">× 0.08</td>
+            <td class="wrap">คำขอที่เร็วที่สุด</td>
+          </tr>
+          <tr>
+            <td class="code-cell">mean</td>
+            <td class="num">54.25</td>
+            <td class="num">× 1.00</td>
+            <td class="wrap">ค่าที่ทุกคนดู และเป็นค่าที่หลอกตาได้ง่ายที่สุด</td>
+          </tr>
+          <tr>
+            <td class="code-cell">p50 (median)</td>
+            <td class="num">44.40</td>
+            <td class="num">× 0.82</td>
+            <td class="wrap">ครึ่งหนึ่งของคำขอเร็วกว่านี้ — ต่ำกว่าค่าเฉลี่ยเพราะหางดึงค่าเฉลี่ยขึ้น</td>
+          </tr>
+          <tr>
+            <td class="code-cell">p75</td>
+            <td class="num">54.69</td>
+            <td class="num">× 1.01</td>
+            <td class="wrap">ใกล้เคียงค่าเฉลี่ยมาก</td>
+          </tr>
+          <tr>
+            <td class="code-cell">p90</td>
+            <td class="num">65.31</td>
+            <td class="num">× 1.20</td>
+            <td class="wrap">ยังอยู่ในกลุ่มก้อนหลักของการกระจาย</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">p95</td>
+            <td class="num">74.53</td>
+            <td class="num">× 1.37</td>
+            <td class="wrap">จุดที่หลายทีมใช้เป็นเกณฑ์ SLO</td>
+          </tr>
+          <tr class="row-signal">
+            <td class="code-cell">p99</td>
+            <td class="num">466.29</td>
+            <td class="num">× 8.60</td>
+            <td class="wrap">แย่กว่าค่าเฉลี่ย 8.6 เท่า นี่คือจุดที่ค่าเฉลี่ยกลบไว้หมด</td>
+          </tr>
+          <tr>
+            <td class="code-cell">max</td>
+            <td class="num">584.70</td>
+            <td class="num">× 10.78</td>
+            <td class="wrap">คำขอที่ช้าที่สุดเพียงตัวเดียว</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="keypoint">
+      p50 <span class="key-figure">44.40</span> ms ต่ำกว่าค่าเฉลี่ย 54.25 ms อยู่ 18% เป็นร่องรอยของหางยาว
+      ส่วน p99 สูงกว่าค่าเฉลี่ย 8.6 เท่า หมายความว่า 1% ของคำขอใช้เวลาเกิน 466 ms หรือราว 12 คำขอ
+    </p>
+
+    <p class="source-note">
+      <strong>ที่มาและความคลาดเคลื่อนที่ควรรู้:</strong> ค่าในตารางนี้คำนวณจากข้อมูลดิบทั้ง 1,155 ค่า
+      ใน <code>assets/data/latency-samples.json</code> ด้วยวิธีเทียบสัดส่วน เทียบกับตัวเลขที่ k6 รายงาน
+      แล้วตรงกันทุกค่าถึงทศนิยมสองตำแหน่ง ยกเว้น p90 ที่คำนวณได้ 65.30 ms ขณะที่ k6 รายงาน 65.31 ms
+      ต่างกัน 0.006 ms เพราะ k6 ใช้ตัวประมาณค่าเปอร์เซ็นไทล์ของตัวเอง
+      ชุดทดสอบ <code>scripts/test-calc.mjs</code> จึงตั้งเกณฑ์ยอมรับไว้ที่ 0.01 ms
+    </p>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">กับดักของการรายงานด้วยค่าเฉลี่ย</span>
+      </div>
+      <p>
+        ถ้ารายงานว่า "ค่าเฉลี่ย 54 ms ผ่านเกณฑ์" แล้วปิดงาน เราจะไม่รู้เลยว่ามีคำขอ 584 ms
+        ที่ผู้ใช้รู้สึกได้ชัดว่าช้า และมันจะเกิดซ้ำต่อเนื่องเพราะเป็น 1% ของทราฟฟิก ไม่ใช่ความบังเอิญ
+      </p>
+    </div>
+
+    <h2 id="how-to-calculate">คำนวณเปอร์เซ็นไทล์ด้วยมือ</h2>
+
+    <p>สี่ขั้นตอนนี้ใช้ได้กับข้อมูลทุกขนาด</p>
+
+    <ol class="steps">
+      <li><strong>เก็บค่าทั้งหมด</strong> ที่ต้องการวิเคราะห์ ในที่นี้คือเวลาตอบสนองของทุกคำขอ</li>
+      <li><strong>เรียงจากน้อยไปมาก</strong> แล้วนับจำนวนข้อมูลทั้งหมดเป็น n</li>
+      <li>
+        <strong>หาตำแหน่งของเปอร์เซ็นไทล์ที่ต้องการ</strong> ด้วยสูตร
+        <code>ตำแหน่ง = p × (n − 1)</code> โดย p เขียนเป็นสัดส่วนทศนิยม
+        เช่น p95 ใช้ 0.95
+      </li>
+      <li>
+        <strong>เทียบสัดส่วนระหว่างสองค่าที่อยู่ติดกัน</strong> ถ้าตำแหน่งที่ได้ไม่ลงตัว
+        ให้เอาค่าที่ตำแหน่งปัดลง กับค่าที่ตำแหน่งปัดขึ้น มาเทียบสัดส่วนตามเศษที่เหลือ
+      </li>
+    </ol>
+
+    <p>ค่าที่ได้จึงเปลี่ยนอย่างต่อเนื่อง ไม่กระโดดเป็นขั้น</p>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">ระวังการนับดัชนี</span>
+      </div>
+      <p>
+        สูตรนี้ให้ค่า <em>ดัชนี</em> ที่เริ่มนับจาก 0 ไม่ใช่ลำดับที่เริ่มนับจาก 1
+        ตำแหน่ง 4.5 จึงอยู่ระหว่าง<strong>ดัชนีที่ 4</strong> กับ <strong>ดัชนีที่ 5</strong>
+      </p>
+    </div>
+
+    <h3 id="manual-example">ตัวอย่างคำนวณด้วยมือจากข้อมูล 10 ค่า</h3>
+
+    <p>
+      สมมติว่าเก็บเวลาตอบสนองได้ 10 ค่า เรียงแล้วเป็น
+      12, 18, 21, 25, 30, 34, 41, 52, 68, 120 มิลลิวินาที โดย n = 10
+      ตารางนี้แสดงดัชนีของแต่ละค่า
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ชุดข้อมูลตัวอย่าง 10 ค่า พร้อมดัชนีที่ใช้ในสูตร</caption>
+        <thead>
+          <tr>
+            <th class="num">ดัชนี</th>
+            <th class="num">0</th>
+            <th class="num">1</th>
+            <th class="num">2</th>
+            <th class="num">3</th>
+            <th class="num">4</th>
+            <th class="num">5</th>
+            <th class="num">6</th>
+            <th class="num">7</th>
+            <th class="num">8</th>
+            <th class="num">9</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">ค่า (ms)</td>
+            <td class="num">12</td>
+            <td class="num">18</td>
+            <td class="num">21</td>
+            <td class="num">25</td>
+            <td class="num">30</td>
+            <td class="num">34</td>
+            <td class="num">41</td>
+            <td class="num">52</td>
+            <td class="num">68</td>
+            <td class="num">120</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>หาค่าเฉลี่ยก่อน</strong> เพื่อใช้เทียบทีหลัง</p>
+
+    <div class="working">
+      <span class="w-line">12 + 18 + 21 + 25 + 30 + 34 + 41 + 52 + 68 + 120 = 421</span>
+      <span class="w-line w-result">mean = 421 ÷ 10 = 42.1 ms</span>
+    </div>
+
+    <p><strong>หา p50</strong></p>
+
+    <div class="working">
+      <span class="w-line">ตำแหน่ง = 0.50 × (10 − 1) = 4.5</span>
+      <span class="w-line w-label">        ดัชนี 4.5 อยู่ระหว่างดัชนี 4 กับดัชนี 5</span>
+      <span class="w-line">        ค่าที่ดัชนี 4 = 30 ms</span>
+      <span class="w-line">        ค่าที่ดัชนี 5 = 34 ms</span>
+      <span class="w-line">        เศษที่เหลือ = 0.5</span>
+      <span class="w-line">ค่า     = 30 + (34 − 30) × 0.5</span>
+      <span class="w-line w-result">        = 30 + 2 = 32 ms</span>
+    </div>
+
+    <p><strong>หา p90</strong></p>
+
+    <div class="working">
+      <span class="w-line">ตำแหน่ง = 0.90 × 9 = 8.1</span>
+      <span class="w-label w-line">        ดัชนี 8.1 อยู่ระหว่างดัชนี 8 กับดัชนี 9</span>
+      <span class="w-line">        ค่าที่ดัชนี 8 = 68 ms</span>
+      <span class="w-line">        ค่าที่ดัชนี 9 = 120 ms</span>
+      <span class="w-line">        เศษที่เหลือ = 0.1</span>
+      <span class="w-line">ค่า     = 68 + (120 − 68) × 0.1</span>
+      <span class="w-line w-result">        = 68 + 5.2 = 73.2 ms</span>
+    </div>
+
+    <p><strong>หา p95</strong></p>
+
+    <div class="working">
+      <span class="w-line">ตำแหน่ง = 0.95 × 9 = 8.55</span>
+      <span class="w-line w-label">        อยู่ระหว่างดัชนี 8 (68 ms) กับดัชนี 9 (120 ms)</span>
+      <span class="w-line">ค่า     = 68 + (120 − 68) × 0.55</span>
+      <span class="w-line w-result">        = 68 + 28.6 = 96.6 ms</span>
+    </div>
+
+    <p>เปรียบเทียบผลที่ได้กับค่าเฉลี่ย</p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ผลการคำนวณจากชุดข้อมูลตัวอย่าง 10 ค่า</caption>
+        <thead>
+          <tr>
+            <th>สถิติ</th>
+            <th class="num">ค่า (ms)</th>
+            <th class="num">เทียบกับ mean</th>
+            <th class="wrap">ตำแหน่งและค่าที่ใช้เทียบสัดส่วน</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">mean</td>
+            <td class="num">42.1</td>
+            <td class="num">× 1.00</td>
+            <td class="wrap">ผลรวม 421 ÷ 10</td>
+          </tr>
+          <tr>
+            <td class="code-cell">p50</td>
+            <td class="num">32</td>
+            <td class="num">× 0.76</td>
+            <td class="wrap">ตำแหน่ง 4.5 → ดัชนี 4 (30) กับดัชนี 5 (34)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">p90</td>
+            <td class="num">73.2</td>
+            <td class="num">× 1.74</td>
+            <td class="wrap">ตำแหน่ง 8.1 → ดัชนี 8 (68) กับดัชนี 9 (120)</td>
+          </tr>
+          <tr class="row-signal">
+            <td class="code-cell">p95</td>
+            <td class="num">96.6</td>
+            <td class="num">× 2.29</td>
+            <td class="wrap">ตำแหน่ง 8.55 → ดัชนี 8 (68) กับดัชนี 9 (120)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      p50 32 ms ต่ำกว่าค่าเฉลี่ย 42.1 ms ราว 24% เพราะค่า 120 ms ตัวเดียวดึงค่าเฉลี่ยขึ้น
+      ขณะที่ p95 96.6 ms สูงกว่ากว่าเท่าตัวด้วยเหตุผลเดียวกัน
+    </p>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ชุดข้อมูล 10 ค่านี้สร้างขึ้นเพื่อแสดงวิธีคำนวณด้วยมือ ไม่ใช่ผลการวัดจริง
+      ข้อมูลจริงในบทนี้คือชุด 1,155 ค่าด้านล่าง
+    </p>
+
+    <h2 id="histogram">ดูรูปร่างของการกระจาย</h2>
+
+    <p>
+      ฮิสโตแกรมด้านล่างแบ่งช่วงละ 2 ms แท่งท้ายที่แยกไปทางขวารวบทุกคำขอ
+      ตั้งแต่ 100 ms ขึ้นไปไว้ด้วยกัน
+    </p>
+
+    <figure class="chart-figure bleed" id="hist-figure">
+      <figcaption>
+        <p class="chart-title">การกระจายของเวลาตอบสนอง 1,155 คำขอ</p>
+        <p class="chart-caption">
+          แกนนอนคือเวลาตอบสนอง หน่วยมิลลิวินาที แกนตั้งคือจำนวนคำขอ
+          ช่วงกว้าง 2 ms ต่อแท่ง ส่วนแท่งสีส้มทางขวารวมทุกคำขอที่ใช้เวลา 100 ms ขึ้นไปไว้ด้วยกัน
+          เส้นประคือค่าเฉลี่ย และเส้นที่สองคือ p95
+        </p>
+      </figcaption>
+      <div class="chart-host" id="hist-host" tabindex="0" aria-describedby="hist-desc"></div>
+      <p id="hist-desc" class="chart-foot">
+        ข้อมูลจาก <code>assets/data/latency-samples.json</code> ซึ่งบันทึกจาก
+        <code>http_req_duration</code> ของการรัน k6 v2.2.0 (10 VUs, 12 วินาที, 1,155 คำขอ)
+        วางเมาส์บนแท่งเพื่อดูจำนวนคำขอในช่วงนั้น หรือเปิดตารางข้อมูลจริงด้านล่างเพื่อตรวจสอบย้อนกลับ
+      </p>
+      <div id="hist-table-host"></div>
+    </figure>
+
+    <p id="hist-status" class="muted" style="font-size:.85rem">กำลังอ่านไฟล์ข้อมูล</p>
+
+    <h3 id="reading-histogram">อ่านฮิสโตแกรมนี้อย่างไร</h3>
+
+    <ul>
+      <li><strong>ยอดอยู่ที่ช่วง 40–46 ms</strong> ตรงกับ p50 ที่ 44.40 ms คำขอส่วนใหญ่กระจุกตัวในช่วงแคบ ๆ</li>
+      <li><strong>กราฟลาดลงอย่างรวดเร็วหลัง 80 ms</strong> คำขอที่ช้ากว่านั้นมีน้อย แต่ไม่ได้หายไป</li>
+      <li><strong>แท่งท้ายที่มี 36 คำขอ</strong> คือคำขอตั้งแต่ 100 ms ขึ้นไป คิดเป็น 3.1% สูงสุด 584.70 ms</li>
+    </ul>
+
+    <h2 id="cdf">เส้นสัดส่วนสะสม (CDF)</h2>
+
+    <p>
+      ฮิสโตแกรมบอกจำนวนในช่วงต่าง ๆ แต่ไม่ตอบว่า "มีกี่เปอร์เซ็นต์ที่เร็วกว่า 100 ms"
+      เส้นสัดส่วนสะสมหรือ CDF ตอบได้ทันที
+    </p>
+
+    <figure class="chart-figure bleed" id="cdf-figure">
+      <figcaption>
+        <p class="chart-title">เส้นสัดส่วนสะสมของเวลาตอบสนอง 1,155 คำขอ</p>
+        <p class="chart-caption">
+          แกนนอนคือเวลาตอบสนอง หน่วยมิลลิวินาที แกนตั้งคือสัดส่วนสะสมของคำขอเป็นเปอร์เซ็นต์
+          จุดตัดของเส้นประกับเส้นโค้งคือค่าเปอร์เซ็นไทล์นั้น เส้นสีส้มคือค่าเฉลี่ย
+          สังเกตว่าเส้นโค้งชันมากในช่วงซ้าย แล้วลากยาวออกไปทางขวาจนถึง 584 ms
+        </p>
+      </figcaption>
+      <div class="chart-host" id="cdf-host" tabindex="0" aria-describedby="cdf-desc"></div>
+      <p id="cdf-desc" class="chart-foot">
+        วางเมาส์บนกราฟหรือกด Tab เพื่อโฟกัสแล้วใช้ปุ่มลูกศรซ้ายขวาเลื่อนดูค่าได้
+        ตัวเลขทุกจุดบนเส้นคำนวณจากข้อมูลจริงทั้ง 1,155 ค่า ไม่ได้เป็นการประมาณ
+      </p>
+      <div id="cdf-table-host"></div>
+    </figure>
+
+    <p id="cdf-status" class="muted" style="font-size:.85rem">กำลังอ่านไฟล์ข้อมูล</p>
+
+    <h3 id="cdf-vs-histogram">สิ่งที่ CDF บอกได้ดีกว่าฮิสโตแกรม</h3>
+
+    <p>
+      เส้นโค้งไต่ขึ้นเรื่อย ๆ แม้จะช้ามาก นั่นคือภาพของหางยาว เส้นลากจาก 80 ms
+      ถึง 584 ms หรือกว่า <span class="key-figure">500</span> ms เพื่อเก็บคำขอไม่กี่เปอร์เซ็นต์สุดท้าย
+    </p>
+
+    <h2 id="impact">ผลกระทบต่อผู้ใช้จริง</h2>
+
+    <p>
+      "p95 เท่ากับ <span class="key-figure">74.53</span> ms" ฟังดูดี แต่หมายถึง 5% ของคำขอยังช้ากว่านั้น
+      และหนึ่งหน้ามักยิงหลายคำขอ ถ้าหนึ่งหน้าเรียกข้อมูล 20 คำขอ แต่ละคำขอมีโอกาส 5% ที่จะช้ากว่า p95
+      โอกาสที่ผู้ใช้จะเจอคำขอที่ช้าอย่างน้อยหนึ่งตัวเป็นเท่าไร
+    </p>
+
+    <div class="working">
+      <span class="w-line w-label">ขั้นที่ 1 — โอกาสที่คำขอเดียวจะ "ไม่ช้า"</span>
+      <span class="w-line">0.95</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">ขั้นที่ 2 — โอกาสที่ทั้ง 20 คำขอจะไม่ช้าเลย</span>
+      <span class="w-line">0.95 ^ 20 = 0.3585</span>
+      <span class="w-line w-label">คำนวณทีละขั้น: 0.95^2 = 0.9025, 0.95^4 = 0.8145, 0.95^5 = 0.7738</span>
+      <span class="w-line w-label">               0.95^10 = 0.5987, 0.95^20 = 0.3585</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">ขั้นที่ 3 — โอกาสที่จะเจออย่างน้อยหนึ่งคำขอที่ช้า</span>
+      <span class="w-line">1 − 0.3585 = 0.6415</span>
+      <span class="w-line w-result">→ ประมาณ 64%</span>
+    </div>
+
+    <p>
+      ตัวเลข 5% ต่อคำขอ กลายเป็น 64% ต่อการเปิดหน้าเว็บหนึ่งครั้ง
+      การวัดจึงต้องดูให้ครบทั้งหน้า ไม่ใช่ทีละ endpoint
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>โอกาสที่ผู้ใช้จะเจอคำขอที่ช้ากว่าเปอร์เซ็นไทล์ เมื่อหนึ่งหน้าเว็บยิงคำขอหลายรายการ</caption>
+        <thead>
+          <tr>
+            <th class="num">คำขอต่อหน้า</th>
+            <th class="num">โอกาสเจอคำขอที่ช้ากว่า p95</th>
+            <th class="num">โอกาสเจอคำขอที่ช้ากว่า p99</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="num">1</td><td class="num">5.0%</td><td class="num">1.0%</td></tr>
+          <tr><td class="num">5</td><td class="num">22.6%</td><td class="num">4.9%</td></tr>
+          <tr class="row-accent"><td class="num">20</td><td class="num">64.2%</td><td class="num">18.2%</td></tr>
+          <tr><td class="num">50</td><td class="num">92.3%</td><td class="num">39.5%</td></tr>
+          <tr><td class="num">100</td><td class="num">99.4%</td><td class="num">63.4%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ตารางนี้คำนวณจากสูตร <code>1 − (1 − p)^n</code> โดย p คือสัดส่วน
+      ของคำขอที่ช้ากว่าเปอร์เซ็นไทล์นั้น (0.05 สำหรับ p95 และ 0.01 สำหรับ p99) และ n คือจำนวน
+      คำขอต่อหนึ่งหน้า เป็นการคำนวณเชิงความน่าจะเป็น ไม่ใช่ผลการวัด สมมติว่าคำขอแต่ละตัวเป็นอิสระต่อกัน
+    </p>
+
+    <h2 id="thresholds">ตั้งเกณฑ์ตัดสินบนเปอร์เซ็นไทล์</h2>
+
+    <p>
+      k6 ตั้ง threshold บนค่าเปอร์เซ็นไทล์ได้โดยตรง ตรงกับสิ่งที่ SLO ส่วนใหญ่ระบุ
+      ไวยากรณ์คือ <code>p(ค่าเปอร์เซ็นไทล์)&lt;เพดาน</code> โดยไม่มีช่องว่าง
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">threshold บนเปอร์เซ็นไทล์ พร้อมการหยุดอัตโนมัติ</span>
+      </div>
+      <pre><code>export const options = {
+  thresholds: {
+    // เพดานสองระดับ: ระดับปกติที่ต้องผ่านเสมอ และระดับที่ยอมรับได้ในกรณีเลวร้าย
+    http_req_duration: ['p(95)&lt;500', 'p(99)&lt;1500'],
+
+    // ห้ามให้ความผิดพลาดเกิน 1% และหยุดการทดสอบถ้าเกิน
+    http_req_failed: [{
+      threshold: 'rate&lt;0.01',
+      abortOnFail: true,        // หยุดการรันเมื่อเกณฑ์นี้ไม่ผ่าน
+      delayAbortEval: '60s',    // แต่ยังไม่ต้องตัดสินใจหยุดใน 60 วินาทีแรก
+    }],
+  },
+};</code></pre>
+    </div>
+
+    <p>
+      <code>abortOnFail</code> ประหยัดเวลาของคนรันและลดภาระที่ยิงใส่ระบบปลายทาง
+      เมื่อรู้แน่แล้วว่าการทดสอบล้มเหลว ส่วน <code>delayAbortEval</code> เลื่อน
+      "เวลาที่จะตัดสินใจหยุด" ออกไป เพราะช่วงต้นการรันค่าเปอร์เซ็นไทล์จะสูงชั่วคราว
+    </p>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ชื่อที่ถูกต้องคือ delayAbortEval และมันไม่ได้กรองข้อมูล</span>
+      </div>
+      <p>
+        <code>delayAbortedCheck</code> ไม่มีอยู่ใน k6 v2.2.0 และ k6 เพิกเฉยต่อตัวเลือกที่ไม่รู้จัก
+        ชื่อที่ถูกคือ <code>delayAbortEval</code> ในรูปแบบยาว คู่กับ <code>abortOnFail: true</code>
+      </p>
+      <p>
+        <code>delayAbortEval</code> เลื่อนเฉพาะ <strong>การตัดสินใจหยุดการรัน</strong>
+        <strong>ไม่ได้ตัดข้อมูลช่วงอุ่นเครื่องออกจากการคำนวณค่าเปอร์เซ็นไทล์</strong>
+        ค่า <code>p(95)</code> ท้ายการรันยังรวมช่วงอุ่นเครื่อง ทดลองแล้ว:
+        รันที่ตั้ง <code>delayAbortEval</code> 20.1 วินาที กับรันที่ไม่ได้ตั้ง จบเท่ากัน
+        ได้ <code>p(95)</code> 603.32 ms กับ 602.49 ms ทั้งที่ 10 วินาทีแรกของทั้งสองรัน
+        ถูกทำให้ตอบช้า 600 ms ถ้ากรองข้อมูลได้ ค่าของรันที่ตั้งไว้ต้องเหลือราว 25–45 ms
+        ผลดิบอยู่ที่ <code>docs/evidence/k6-delay-abort-eval.txt</code>
+        วิธีตัดสินเฉพาะช่วงภาวะคงตัวอยู่ใน <a href="05-load-profiles.html#steady-only">บทที่ 5</a>
+      </p>
+      <p>
+        k6 ตรวจชื่อฟิลด์ที่ไม่รู้จักเฉพาะระดับบนสุดของ <code>options</code>
+        ชื่อผิดที่อยู่ "ข้างใน" ออบเจกต์ threshold จะถูกเพิกเฉยอย่างเงียบ ๆ
+        จึงควรตรวจด้วย <code>k6 inspect</code>
+      </p>
+    </div>
+
+    <div class="callout callout--evidence">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+        <span class="label">ตัวอย่างการรันที่ threshold ผ่านจริง</span>
+      </div>
+      <p>
+        ในการรันที่ตั้ง <code>http_req_duration: ['p(95)&lt;500']</code>
+        k6 รายงานว่าเกณฑ์ผ่าน โดย p(95) วัดได้ 28.39 ms ต่ำกว่าเพดาน 500 ms มาก
+        ตัวเลขนี้มาจากการรันคนละครั้งกับชุดข้อมูล 1,155 ค่าในหน้านี้
+      </p>
+    </div>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">กับดักของ abortOnFail</span>
+      </div>
+      <p>
+        เมื่อใช้ <code>abortOnFail</code> การรันจะหยุดกลางทาง ข้อมูลที่ได้จึงไม่ครบช่วง
+        และใช้เทียบกับเกณฑ์อื่นไม่ได้ ให้ใช้กับเกณฑ์ที่แปลว่า "ไม่ต้องทดสอบต่อแล้ว" เท่านั้น
+        ไม่ควรใช้กับเกณฑ์ที่ต้องการดูว่าค่าจะไปจบที่เท่าไร
+      </p>
+    </div>
+
+    <h2 id="max">ทำไมค่าสูงสุดจึงเป็นเกณฑ์ที่ไม่ดี</h2>
+
+    <p>
+      ค่าสูงสุดของการรันคือ <span class="key-figure">584.70</span> ms จากคำขอตัวเดียว
+      ถ้ามีคำขอเดียวใน 1,155 ตัวที่ช้าผิดปกติเพราะเครื่องทดสอบเก็บขยะหน่วยความจำ
+      ค่าสูงสุดจะเปลี่ยนทันทีโดยเราไม่รู้ว่าเป็นปัญหาจริงหรือความบังเอิญ
+    </p>
+
+    <p>
+      p99 ยืนหยัดกว่าเพราะคำนวณจาก 12 คำขอ แต่ max ยังมีประโยชน์เป็นเบาะแส
+      ถ้า max กระโดดสูงขณะที่ p99 ไม่ขยับ ให้ไปหาว่าคำขอตัวนั้นเกิดอะไรขึ้น
+      ซึ่งมักเป็นปัญหาเฉพาะราย เช่น timeout ที่นานผิดปกติ
+    </p>
+
+    <h2 id="summary">สรุปบทที่ 4</h2>
+
+    <ul>
+      <li>จากข้อมูลจริง p50 44.40 ms ต่ำกว่า mean 54.25 ms และ p99 466.29 ms สูงกว่า mean 8.6 เท่า — ลายเซ็นของหางยาว</li>
+      <li>ถ้าหนึ่งหน้ายิง 20 คำขอ โอกาสเจอคำขอที่ช้ากว่า p95 คือ 64%</li>
+      <li>ตั้ง threshold ด้วย <code>p(95)&lt;500</code> ไม่ใช่บนค่าเฉลี่ย เพราะนั่นคือสิ่งที่ SLO ระบุ</li>
+    </ul>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.2" y="2.8" width="11.6" height="14.4" rx="1.4"/><path d="M7 6.4h6M7.4 10h.01M10 10h.01M12.6 10h.01M7.4 13h.01M10 13h.01M12.6 13h.01"/></svg>
+        <span class="label">ลองเอง</span>
+      </div>
+      <p>
+        เปิด <a href="../tools/latency.html">หน้าสำรวจข้อมูล latency</a>
+        แล้วลองใส่ค่า p ตั้งแต่ 1 ถึง 99.9 จะเห็นว่าค่าเพิ่มขึ้นช้า ๆ จนถึง p95
+        แล้วกระโดดอย่างรวดเร็วหลัง p97
+      </p>
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/calc.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* สัดส่วนสะสม ณ ค่า x หาจากการค้นหาแบบไบนารีในข้อมูลที่เรียงแล้ว */
+  function cdfAt(sorted, x) {
+    var lo = 0, hi = sorted.length;
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (sorted[mid] <= x) lo = mid + 1; else hi = mid;
+    }
+    return lo / sorted.length * 100;
+  }
+
+  function buildCdfTable(sorted, marks, calc) {
+    var table = document.createElement('table');
+    table.className = 'data';
+    var cap = document.createElement('caption');
+    cap.textContent = 'ตารางข้อมูลจริงของเส้น CDF: ค่าเปอร์เซ็นไทล์และเวลาตอบสนองที่ตรงกับตำแหน่งนั้น ' +
+      '(คำนวณจากข้อมูล ' + sorted.length + ' ค่า ด้วยตำแหน่ง p × (n − 1))';
+    table.appendChild(cap);
+
+    var thead = document.createElement('thead');
+    var hr = document.createElement('tr');
+    ['เปอร์เซ็นไทล์', 'เวลาตอบสนอง (ms)', 'สัดส่วนสะสมที่วัดได้จริง', 'จำนวนคำขอที่เร็วกว่านี้'].forEach(function (t) {
+      var th = document.createElement('th');
+      th.textContent = t;
+      if (t !== 'เปอร์เซ็นไทล์') th.className = 'num';
+      hr.appendChild(th);
+    });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    var markSet = {};
+    marks.forEach(function (m) { markSet[m.p] = m.label; });
+
+    [1, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.9].forEach(function (p) {
+      var step = calc.percentileStep(sorted, p);
+      if (!step) return;
+      var tr = document.createElement('tr');
+      if (p === 95 || p === 99) tr.className = 'row-signal';
+      var actual = cdfAt(sorted, step.value);
+      var cells = [
+        { text: 'p' + p + (markSet[p] ? ' — ' + markSet[p] : ''), cls: '' },
+        { text: calc.round(step.value, 2), cls: 'num' },
+        { text: calc.round(actual, 2) + '%', cls: 'num' },
+        { text: Math.round(actual / 100 * sorted.length), cls: 'num' }
+      ];
+      cells.forEach(function (c) {
+        var td = document.createElement('td');
+        td.className = c.cls;
+        td.textContent = c.text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    var wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    wrap.appendChild(table);
+    return wrap;
+  }
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6 && window.LTK6.__ctx;
+    if (!ctx) return;
+    var calc = window.LTK6.calc;
+    var charts = window.LTK6.charts;
+    var fmt = window.LTK6.format;
+    var src = ctx.root + 'assets/data/latency-samples.json';
+
+    ctx.loadJSON(src).then(function (data) {
+      var sorted = data.sample;
+      var pct = data.percentiles;
+      var desc = calc.describe(sorted);
+
+      /* --- ฮิสโตแกรม --- */
+      charts.histogram(document.getElementById('hist-host'), {
+        bins: data.bins,
+        unit: 'ms',
+        total: data.n,
+        ariaLabel: 'ฮิสโตแกรมการกระจายของเวลาตอบสนอง 1,155 คำขอ ช่วงละ 2 มิลลิวินาที',
+        marks: [
+          { value: desc.mean, label: 'mean ' + fmt.number(desc.mean, 2), kind: 'mean' },
+          { value: pct.p95, label: 'p95 ' + fmt.number(pct.p95, 2), color: 'var(--accent)' }
+        ]
+      });
+      document.getElementById('hist-table-host')
+        .appendChild(charts.histogramTable(data.bins, 'ms', data.n));
+      document.getElementById('hist-status').innerHTML =
+        'อ่านข้อมูลสำเร็จ — n = <span class="num">' + fmt.int(data.n) + '</span> ค่า ' +
+        'จาก ' + esc(data.source) + ' บันทึกเมื่อ ' + esc(data.capturedAt);
+
+      /* --- CDF --- */
+      var points = calc.cdfPoints(sorted, 1200);
+      var meanPct = cdfAt(sorted, desc.mean);
+      charts.cdf(document.getElementById('cdf-host'), {
+        points: points,
+        xMax: 600,
+        unit: 'ms',
+        ariaLabel: 'เส้นสัดส่วนสะสมของเวลาตอบสนอง แสดงค่า p50 p90 p95 p99 และค่าเฉลี่ย',
+        marks: [
+          { value: pct.p50, pct: 50, label: 'p50 ' + fmt.number(pct.p50, 2), row: 0 },
+          { value: desc.mean, pct: meanPct, label: 'mean ' + fmt.number(desc.mean, 2), kind: 'mean', row: 1 },
+          { value: pct.p90, pct: 90, label: 'p90 ' + fmt.number(pct.p90, 2), row: 2 },
+          { value: pct.p95, pct: 95, label: 'p95 ' + fmt.number(pct.p95, 2), row: 3 },
+          { value: pct.p99, pct: 99, label: 'p99 ' + fmt.number(pct.p99, 2), row: 0 }
+        ]
+      });
+      document.getElementById('cdf-table-host')
+        .appendChild(buildCdfTable(sorted, [
+          { p: 50, label: 'median' },
+          { p: 90, label: '' },
+          { p: 95, label: 'เกณฑ์ SLO ที่พบบ่อย' },
+          { p: 99, label: 'หาง' },
+          { p: 99.9, label: '' }
+        ], calc));
+      document.getElementById('cdf-status').innerHTML =
+        'อ่านข้อมูลสำเร็จ — ค่าเฉลี่ย ' + fmt.number(desc.mean, 2) +
+        ' ms อยู่ที่สัดส่วนสะสม ' + fmt.number(meanPct, 2) + '% ' +
+        'หมายความว่ามีคำขอ ' + Math.round(meanPct / 100 * data.n) + ' ตัวที่เร็วกว่าค่าเฉลี่ย ' +
+        'และอีก ' + (data.n - Math.round(meanPct / 100 * data.n)) + ' ตัวที่ช้ากว่า';
+
+    }).catch(function (err) {
+      var msg = 'อ่านไฟล์ ' + esc(src) + ' ไม่สำเร็จ (' + esc(err.message) + ') — ' +
+        'กราฟในหน้านี้ต้องอ่านข้อมูลผ่าน HTTP จึงต้องเปิดหน้านี้ผ่านเว็บเซิร์ฟเวอร์ ' +
+        'ไม่ใช่เปิดไฟล์ตรง ๆ ด้วย file:// ให้รัน ' +
+        '<code>python3 -m http.server</code> หรือ <code>npx serve</code> ในโฟลเดอร์ site แล้วเปิดผ่าน http://localhost';
+      ['hist-status', 'cdf-status'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = msg;
+      });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

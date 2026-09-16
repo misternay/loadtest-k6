@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ความคืบหน้าของฉัน — บทที่อ่านแล้วและคะแนนแบบทดสอบ | Load Testing ด้วย k6</title>
+<meta name="description" content="สรุปความคืบหน้าการเรียน k6 ของคุณ ทั้งบทที่อ่านแล้วพร้อมเวลา คะแนนแบบทดสอบแต่ละบท คะแนนรวม พร้อมปุ่มส่งออกและนำเข้าข้อมูลความคืบหน้า">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="progress" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    หน้านี้ต้องใช้ JavaScript เพื่ออ่านข้อมูลความคืบหน้าจากเบราว์เซอร์ของคุณ
+    กรุณาเปิด JavaScript แล้วโหลดหน้าใหม่
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+      แบบฝึกหัด
+    </p>
+
+    <h1>ความคืบหน้าของฉัน</h1>
+
+    <p class="lede">
+      หน้านี้สรุปว่าคุณอ่านบทใดแล้ว ทำแบบทดสอบได้เท่าไร และเก็บข้อมูลนั้นไว้ในเบราว์เซอร์นี้เท่านั้น
+      ไม่มีการส่งข้อมูลออกไปที่ใด ข้อมูลจะอยู่ต่อแม้ปิดเบราว์เซอร์ แล้วกลับมาเปิดใหม่
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        เก็บในเครื่องนี้เท่านั้น
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        คีย์ที่ใช้เก็บ: <code id="storage-key">ltk6.progress.v1</code>
+      </div>
+    </div>
+
+    <div id="storage-state"></div>
+
+    <h2 id="summary">ภาพรวม</h2>
+
+    <div class="stat-grid bleed" id="stat-grid"></div>
+
+    <h2 id="reading">ความคืบหน้าการอ่าน</h2>
+
+    <p>
+      บทเรียนมีทั้งหมดหกบท แต่ละบทมีปุ่มทำเครื่องหมายว่าอ่านแล้วอยู่ท้ายหน้า
+      แถบด้านล่างแสดงสถานะของแต่ละบทและเวลาที่บันทึกไว้
+    </p>
+
+    <div class="bar-chart bleed" id="read-chart" role="img"
+         aria-label="กราฟแท่งแสดงความคืบหน้าการอ่านบทเรียนทั้งหกบท">
+    </div>
+    <p class="muted" style="font-size:.83rem" id="read-chart-note"></p>
+
+    <div class="table-wrap">
+      <table class="data" id="read-table">
+        <caption>รายละเอียดการอ่านแต่ละบท</caption>
+        <thead>
+          <tr>
+            <th>บท</th>
+            <th class="wrap">ชื่อบท</th>
+            <th class="wrap">สถานะ</th>
+            <th class="wrap">บันทึกเมื่อ</th>
+            <th class="wrap">เปิดอ่าน</th>
+          </tr>
+        </thead>
+        <tbody id="read-table-body"></tbody>
+      </table>
+    </div>
+
+    <h2 id="quiz-scores">คะแนนแบบทดสอบ</h2>
+
+    <p>
+      แต่ละชุดมีหกข้อ ระบบจะเก็บคะแนนที่ดีที่สุดไว้ ไม่ว่าทำกี่ครั้งก็ตาม
+      และนับจำนวนครั้งที่ทำไว้ให้ด้วยเพื่อดูว่าต้องทบทวนบทไหนมากเป็นพิเศษ
+    </p>
+
+    <div class="bar-chart bleed" id="quiz-chart" role="img"
+         aria-label="กราฟแท่งแสดงคะแนนแบบทดสอบที่ดีที่สุดของแต่ละบท">
+    </div>
+    <p class="muted" style="font-size:.83rem" id="quiz-chart-note"></p>
+
+    <div class="table-wrap">
+      <table class="data" id="quiz-table">
+        <caption>รายละเอียดคะแนนแบบทดสอบแต่ละบท</caption>
+        <thead>
+          <tr>
+            <th>บท</th>
+            <th class="num">คะแนนที่ดีที่สุด</th>
+            <th class="num">ร้อยละ</th>
+            <th class="num">คะแนนครั้งล่าสุด</th>
+            <th class="num">ทำมาแล้ว</th>
+            <th class="wrap">เวลาที่ทำได้ดีที่สุด</th>
+          </tr>
+        </thead>
+        <tbody id="quiz-table-body"></tbody>
+      </table>
+    </div>
+
+    <div id="quiz-total-note"></div>
+
+    <h2 id="overall">ความคืบหน้ารวม</h2>
+
+    <div class="bar-chart bleed" id="overall-chart" role="img"
+         aria-label="กราฟแท่งแสดงความคืบหน้ารวมของการอ่านและการทำแบบทดสอบ">
+    </div>
+
+    <p id="overall-note"></p>
+
+    <h2 id="data-management">ส่งออก นำเข้า และรีเซ็ต</h2>
+
+    <p>
+      ข้อมูลความคืบหน้าอยู่ในเบราว์เซอร์นี้เท่านั้น ถ้าเปลี่ยนเครื่อง เปลี่ยนเบราว์เซอร์
+      หรือล้างข้อมูลเว็บไซต์ ข้อมูลจะหายไป ให้ส่งออกเก็บไว้เป็นไฟล์ JSON
+      แล้วนำเข้ากลับได้เมื่อต้องการ
+    </p>
+
+    <div class="panel bleed">
+      <div class="panel__head">
+        <h3>ส่งออกข้อมูล</h3>
+      </div>
+      <div class="panel__body">
+        <p>
+          ดาวน์โหลดไฟล์ JSON ที่มีทั้งรายการบทที่อ่านแล้วและคะแนนแบบทดสอบทุกชุด
+          ไฟล์นี้ไม่มีข้อมูลส่วนตัวใด ๆ มีเพียงความคืบหน้าในการเรียนเท่านั้น
+        </p>
+        <div class="btn-row">
+          <button class="btn btn--primary" type="button" id="btn-export">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4v8.2"/><path d="M6.8 8.7L10 11.9l3.2-3.2"/><path d="M3.8 15.2v.6a1.2 1.2 0 0 0 1.2 1.2h10a1.2 1.2 0 0 0 1.2-1.2v-.6"/></svg>
+            ส่งออกเป็นไฟล์ JSON
+          </button>
+        </div>
+        <p class="muted" style="font-size:.83rem;margin:0">
+          ชื่อไฟล์ที่ได้จะเป็นรูปแบบ <code>ltk6-progress-ปีเดือนวัน.json</code> โดยเติมวันที่ให้อัตโนมัติ
+        </p>
+      </div>
+    </div>
+
+    <div class="panel bleed">
+      <div class="panel__head">
+        <h3>นำเข้าข้อมูล</h3>
+      </div>
+      <div class="panel__body">
+        <div class="field search-field">
+          <label for="import-file">เลือกไฟล์ JSON ที่ส่งออกไว้ก่อนหน้า <span class="hint">ต้องเป็นไฟล์ schema version 1</span></label>
+          <input type="file" id="import-file" accept="application/json,.json" aria-describedby="import-help">
+          <p class="hint" id="import-help">ระบบจะตรวจรูปแบบไฟล์ก่อน แล้วให้คุณยืนยันอีกครั้งจึงจะนำไปใช้ทับข้อมูลปัจจุบัน</p>
+        </div>
+        <p class="field-error" id="import-error" hidden></p>
+        <div id="import-preview"></div>
+      </div>
+    </div>
+
+    <div class="panel bleed">
+      <div class="panel__head">
+        <h3>รีเซ็ตข้อมูล</h3>
+      </div>
+      <div class="panel__body">
+        <p>
+          ลบเครื่องหมายอ่านแล้วและคะแนนแบบทดสอบทั้งหมดในเบราว์เซอร์นี้
+          การกระทำนี้ย้อนกลับไม่ได้ ถ้าต้องการเก็บไว้ให้ส่งออกก่อน
+        </p>
+        <div class="btn-row">
+          <button class="btn" type="button" id="btn-reset-start">รีเซ็ตความคืบหน้าทั้งหมด</button>
+        </div>
+        <div id="reset-confirm" hidden>
+          <div class="callout callout--danger" style="margin-top:.4em">
+            <div class="callout__head">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+              <span class="label">ยืนยันการลบ</span>
+            </div>
+            <p id="reset-confirm-text"></p>
+            <div class="btn-row" style="margin-bottom:0">
+              <button class="btn btn--primary" type="button" id="btn-reset-confirm">ยืนยัน ลบทั้งหมด</button>
+              <button class="btn" type="button" id="btn-reset-cancel">ยกเลิก ไม่ลบ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="how-it-works">ข้อมูลถูกเก็บอย่างไร</h2>
+
+    <ul>
+      <li>เก็บใน <code>localStorage</code> ของเบราว์เซอร์นี้ ภายใต้คีย์ <code>ltk6.progress.v1</code></li>
+      <li>โครงสร้างไฟล์มีฟิลด์ <code>version</code> กำกับ เพื่อให้ตรวจได้ว่าไฟล์ที่นำเข้ามาจากเวอร์ชันที่รองรับหรือไม่</li>
+      <li>ไม่มีการส่งข้อมูลออกจากเบราว์เซอร์เลย ไม่มีเซิร์ฟเวอร์ ไม่มีบัญชีผู้ใช้</li>
+      <li>ถ้าเปิดในโหมดไม่ระบุตัวตนหรือปิดคุกกี้ไว้ ระบบจะแจ้งเตือนและไม่บันทึกอะไร แต่ยังใช้งานส่วนอื่นได้ตามปกติ</li>
+      <li>การล้างข้อมูลเว็บไซต์ของเบราว์เซอร์จะลบข้อมูลนี้ไปด้วย จึงควรส่งออกเก็บไว้เป็นระยะ</li>
+    </ul>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/quiz.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6.__ctx;
+    var storage = window.LTK6.storage;
+    var quizSets = window.LTK6.quiz ? window.LTK6.quiz.SETS : [];
+    var fmt = window.LTK6.format;
+    if (!ctx || !storage) return;
+
+    var LESSONS = ctx.LESSON_ORDER;
+    var PAGES = ctx.PAGES;
+
+    /* ---------- สถานะการบันทึก ---------- */
+
+    function renderStorageState() {
+      var host = document.getElementById('storage-state');
+      host.innerHTML = '';
+      if (storage.available) {
+        var box = el('div', 'callout callout--ok');
+        box.innerHTML =
+          '<div class="callout__head">' + window.LTK6.icon('check') +
+          '<span class="label">บันทึกความคืบหน้าได้ปกติ</span></div>' +
+          '<p>เบราว์เซอร์นี้ยอมให้เว็บไซต์เก็บข้อมูลไว้ในเครื่องคุณ ' +
+          'ความคืบหน้าจะอยู่ต่อแม้ปิดแท็บหรือปิดเบราว์เซอร์</p>';
+        host.appendChild(box);
+      } else {
+        var warn = el('div', 'callout callout--warn');
+        warn.innerHTML =
+          '<div class="callout__head">' +
+          '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>' +
+          '<span class="label">บันทึกความคืบหน้าไม่ได้ในขณะนี้</span></div>' +
+          '<p>' + esc(storage.unavailableReason) + '</p>' +
+          '<p>คุณยังอ่านบทเรียนและทำแบบทดสอบได้ตามปกติ แต่เครื่องหมายอ่านแล้วกับคะแนน ' +
+          'จะหายไปเมื่อปิดแท็บ</p>' +
+          '<p><strong>วิธีแก้:</strong> เปิดโหมดปกติแทนหน้าต่างส่วนตัว หรือเข้าไปอนุญาตคุกกี้และที่เก็บข้อมูลไซต์ ' +
+          'สำหรับหน้านี้ในการตั้งค่าเบราว์เซอร์</p>' +
+          '<p>ถ้าจำเป็นต้องใช้งานในโหมดนี้จริง ๆ ให้ใช้ปุ่มส่งออกด้านล่างเพื่อเก็บไฟล์ไว้ก่อนปิดแท็บ</p>';
+        host.appendChild(warn);
+      }
+      if (storage.loadError && storage.loadError()) {
+        host.appendChild(el('p', 'muted', storage.loadError()));
+      }
+    }
+
+    /* ---------- ภาพรวม ---------- */
+
+    function renderStats() {
+      var readCount = storage.lessonsReadCount();
+      var qt = storage.quizBestTotal();
+      var quizPct = qt.total ? qt.best / qt.total * 100 : 0;
+      var readPct = readCount / LESSONS.length * 100;
+      var overall = (readPct + quizPct) / 2;
+      var attempted = LESSONS.filter(function (id) { return !!storage.getQuiz(id); }).length;
+
+      var stats = [
+        { label: 'บทที่อ่านแล้ว', value: readCount + ' / ' + LESSONS.length, note: fmt.number(readPct, 0) + '% ของบทเรียนทั้งหมด' },
+        { label: 'คะแนนแบบทดสอบรวม', value: qt.best + ' / ' + qt.total, note: qt.total ? fmt.number(quizPct, 0) + '% ของคะแนนเต็ม' : 'ยังไม่ได้ทำแบบทดสอบ' },
+        { label: 'ความคืบหน้ารวม', value: fmt.number(overall, 0), unit: '%', note: 'เฉลี่ยระหว่างการอ่านและคะแนน' },
+        { label: 'ชุดแบบทดสอบที่ทำแล้ว', value: attempted + ' / ' + LESSONS.length, note: attempted === LESSONS.length ? 'ทำครบทุกชุดแล้ว' : 'ยังเหลืออีก ' + (LESSONS.length - attempted) + ' ชุด' }
+      ];
+
+      var grid = document.getElementById('stat-grid');
+      grid.innerHTML = '';
+      stats.forEach(function (s) {
+        var d = el('div', 'stat');
+        d.appendChild(el('p', 'stat__label', s.label));
+        var v = el('p', 'stat__value');
+        v.textContent = s.value;
+        if (s.unit) {
+          var u = el('span', 'stat__unit', s.unit);
+          v.appendChild(u);
+        }
+        d.appendChild(v);
+        d.appendChild(el('p', 'stat__note', s.note));
+        grid.appendChild(d);
+      });
+    }
+
+    /* ---------- กราฟแท่ง ---------- */
+
+    function barRow(label, pct, valueText, variant, barLabel) {
+      var row = el('div', 'bar-row');
+      row.appendChild(el('span', 'bar-row__label', label));
+      var track = el('div', 'bar-track');
+      var fill = el('div', 'bar-fill' + (variant ? ' bar-fill--' + variant : ''));
+      fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+      if (barLabel) fill.setAttribute('title', barLabel);
+      track.appendChild(fill);
+      row.appendChild(track);
+      var val = el('span', 'bar-row__value', valueText);
+      row.appendChild(val);
+      return row;
+    }
+
+    function renderReadChart() {
+      var host = document.getElementById('read-chart');
+      host.innerHTML = '';
+      var readPct = storage.lessonsReadCount() / LESSONS.length * 100;
+      LESSONS.forEach(function (id, i) {
+        var isRead = storage.isRead(id);
+        host.appendChild(barRow(
+          'บทที่ ' + (i + 1) + ' — ' + PAGES[id].title.replace(/^\d+\.\s*/, ''),
+          isRead ? 100 : 0,
+          isRead ? 'อ่านแล้ว' : 'ยังไม่อ่าน',
+          isRead ? null : 'empty',
+          isRead ? 'อ่านแล้ว' : 'ยังไม่ได้ทำเครื่องหมาย'
+        ));
+      });
+      host.appendChild(barRow('รวมทั้งหลักสูตร', readPct,
+        fmt.number(readPct, 0) + '%', 'quiz', null));
+      document.getElementById('read-chart-note').textContent =
+        'อ่านแล้ว ' + storage.lessonsReadCount() + ' จาก ' + LESSONS.length + ' บท ' +
+        '(' + fmt.number(readPct, 0) + '%) แถบสุดท้ายคือความคืบหน้ารวม';
+    }
+
+    function renderQuizChart() {
+      var host = document.getElementById('quiz-chart');
+      host.innerHTML = '';
+      var totalBest = 0, totalMax = 0, any = false;
+      LESSONS.forEach(function (id, i) {
+        var q = storage.getQuiz(id);
+        var pct = q ? q.best / q.total * 100 : 0;
+        if (q) { totalBest += q.best; totalMax += q.total; any = true; }
+        host.appendChild(barRow(
+          'บทที่ ' + (i + 1) + ' — ' + PAGES[id].title.replace(/^\d+\.\s*/, ''),
+          pct,
+          q ? q.best + '/' + q.total + ' (' + fmt.number(pct, 0) + '%)' : 'ยังไม่ทำ',
+          q ? 'quiz' : 'empty',
+          q ? 'ทำได้ ' + q.best + ' จาก ' + q.total + ' ข้อ' : 'ยังไม่ได้ทำแบบทดสอบชุดนี้'
+        ));
+      });
+      var pctAll = totalMax ? totalBest / totalMax * 100 : 0;
+      host.appendChild(barRow('รวมทุกชุด', pctAll,
+        any ? totalBest + '/' + totalMax + ' (' + fmt.number(pctAll, 0) + '%)' : 'ยังไม่ทำ',
+        'quiz', null));
+      document.getElementById('quiz-chart-note').textContent = any
+        ? 'คะแนนที่ดีที่สุดรวม ' + totalBest + ' จาก ' + totalMax + ' ข้อ (' + fmt.number(pctAll, 0) + '%) ' +
+          'คิดจากชุดที่ทำแล้วเทียบกับคะแนนเต็มของชุดนั้น'
+        : 'ยังไม่ได้ทำแบบทดสอบชุดใดเลย เริ่มได้ที่หน้าแบบทดสอบท้ายบท';
+    }
+
+    function renderOverallChart() {
+      var host = document.getElementById('overall-chart');
+      host.innerHTML = '';
+      var readPct = storage.lessonsReadCount() / LESSONS.length * 100;
+      var qt = storage.quizBestTotal();
+      var quizPct = qt.total ? qt.best / qt.total * 100 : 0;
+      var overall = (readPct + quizPct) / 2;
+      host.appendChild(barRow('การอ่านบทเรียน', readPct, fmt.number(readPct, 0) + '%', null, null));
+      host.appendChild(barRow('คะแนนแบบทดสอบ', quizPct, fmt.number(quizPct, 0) + '%', 'quiz', null));
+      host.appendChild(barRow('ความคืบหน้ารวม', overall, fmt.number(overall, 0) + '%', null, null));
+      var note = document.getElementById('overall-note');
+      if (overall === 0) {
+        note.textContent = 'ยังไม่มีความคืบหน้า เริ่มจากบทที่ 1 ได้เลย';
+      } else if (overall >= 100) {
+        note.textContent = 'ครบทั้งหลักสูตรแล้ว ทั้งอ่านจบและทำแบบทดสอบได้คะแนนเต็มทุกชุด';
+      } else {
+        note.textContent = 'ความคืบหน้ารวมคำนวณจากการเฉลี่ยร้อยละของบทที่อ่านแล้วกับร้อยละของคะแนนแบบทดสอบ';
+      }
+    }
+
+    /* ---------- ตาราง ---------- */
+
+    function renderReadTable() {
+      var body = document.getElementById('read-table-body');
+      body.innerHTML = '';
+      LESSONS.forEach(function (id, i) {
+        var tr = document.createElement('tr');
+        var isRead = storage.isRead(id);
+        var at = storage.readAt(id);
+
+        var tdNum = el('td', 'num', String(i + 1));
+        tr.appendChild(tdNum);
+        tr.appendChild(el('td', 'wrap', PAGES[id].title.replace(/^\d+\.\s*/, '')));
+
+        var tdStatus = el('td', 'wrap');
+        if (isRead) {
+          tdStatus.innerHTML = '<span class="status-pill is-done">อ่านแล้ว</span>';
+        } else {
+          tdStatus.innerHTML = '<span class="status-pill is-none">ยังไม่อ่าน</span>';
+        }
+        tr.appendChild(tdStatus);
+
+        tr.appendChild(el('td', 'wrap', isRead ? storage.formatDateTime(at) : '—'));
+
+        var tdLink = el('td', 'wrap');
+        var a = document.createElement('a');
+        a.href = PAGES[id].file;
+        a.textContent = 'เปิดบทนี้';
+        tdLink.appendChild(a);
+        tr.appendChild(tdLink);
+
+        body.appendChild(tr);
+      });
+    }
+
+    function renderQuizTable() {
+      var body = document.getElementById('quiz-table-body');
+      body.innerHTML = '';
+      LESSONS.forEach(function (id, i) {
+        var q = storage.getQuiz(id);
+        var tr = document.createElement('tr');
+        tr.appendChild(el('td', 'num', String(i + 1)));
+        tr.appendChild(el('td', 'num', q ? q.best + '/' + q.total : '—'));
+        tr.appendChild(el('td', 'num', q ? fmt.number(q.best / q.total * 100, 0) + '%' : '—'));
+        tr.appendChild(el('td', 'num', q ? String(q.lastScore) : '—'));
+        tr.appendChild(el('td', 'num', q ? String(q.attempts) : '—'));
+        tr.appendChild(el('td', 'wrap', q ? storage.formatDateTime(q.at) : 'ยังไม่เคยทำ'));
+        body.appendChild(tr);
+      });
+
+      var qt = storage.quizBestTotal();
+      var host = document.getElementById('quiz-total-note');
+      host.innerHTML = '';
+      if (qt.total > 0) {
+        var box = el('div', 'callout callout--evidence');
+        box.innerHTML =
+          '<div class="callout__head">' + window.LTK6.icon('sum') +
+          '<span class="label">คะแนนรวม</span></div>' +
+          '<p>คะแนนที่ดีที่สุดรวม <span class="num">' + qt.best + '</span> จาก ' +
+          '<span class="num">' + qt.total + '</span> ข้อ คิดเป็น ' +
+          fmt.number(qt.best / qt.total * 100, 1) + '%</p>';
+        host.appendChild(box);
+      }
+    }
+
+    function renderAll() {
+      renderStats();
+      renderReadChart();
+      renderQuizChart();
+      renderOverallChart();
+      renderReadTable();
+      renderQuizTable();
+    }
+
+    /* ---------- ส่งออก ---------- */
+
+    document.getElementById('btn-export').addEventListener('click', function () {
+      var text = storage.exportJSON();
+      var blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = storage.exportFilename();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+
+      var note = document.getElementById('import-preview');
+      note.innerHTML = '';
+      var ok = el('div', 'callout callout--ok');
+      ok.innerHTML = '<div class="callout__head">' + window.LTK6.icon('check') +
+        '<span class="label">ส่งออกแล้ว</span></div>' +
+        '<p>ดาวน์โหลดไฟล์ <code>' + esc(storage.exportFilename()) + '</code> เรียบร้อย ' +
+        'เก็บไฟล์นี้ไว้เพื่อนำเข้ากลับในภายหลัง</p>';
+      note.appendChild(ok);
+    });
+
+    /* ---------- นำเข้า (ตรวจก่อน แล้วให้ยืนยัน) ---------- */
+
+    var importFile = document.getElementById('import-file');
+    var importErr = document.getElementById('import-error');
+    var importPreview = document.getElementById('import-preview');
+
+    function showImportError(msg) {
+      importErr.hidden = false;
+      importErr.innerHTML =
+        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>' +
+        '<span>' + esc(msg) + '<span class="fix">วิธีแก้: ตรวจว่าเลือกไฟล์ที่ส่งออกจากหน้านี้จริง ' +
+        'และยังไม่ได้แก้ไขเนื้อหาในไฟล์</span></span>';
+      importFile.setAttribute('aria-invalid', 'true');
+      importPreview.innerHTML = '';
+    }
+
+    function clearImportError() {
+      importErr.hidden = true;
+      importErr.innerHTML = '';
+      importFile.removeAttribute('aria-invalid');
+    }
+
+    importFile.addEventListener('change', function () {
+      clearImportError();
+      importPreview.innerHTML = '';
+      var file = importFile.files && importFile.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onerror = function () {
+        showImportError('อ่านไฟล์ไม่สำเร็จ อาจเป็นเพราะไฟล์ถูกย้ายหรือถูกลบระหว่างอ่าน');
+      };
+      reader.onload = function () {
+        var text = String(reader.result || '');
+        var check = storage.validateImport(text);
+        if (!check.ok) {
+          showImportError(check.error);
+          return;
+        }
+        var s = check.summary;
+        var box = el('div', 'callout callout--note');
+        box.innerHTML =
+          '<div class="callout__head">' + window.LTK6.icon('info') +
+          '<span class="label">ตรวจไฟล์ผ่าน — รอยืนยัน</span></div>' +
+          '<p>ไฟล์นี้ใช้ได้ มีบทที่อ่านแล้ว <span class="num">' + s.read +
+          '</span> รายการ และคะแนนแบบทดสอบ <span class="num">' + s.quiz +
+          '</span> ชุด' +
+          (s.updatedAt ? ' บันทึกไว้เมื่อ ' + esc(storage.formatDateTime(s.updatedAt)) : '') + '</p>' +
+          '<p>การนำเข้าจะ<strong>แทนที่</strong>ความคืบหน้าปัจจุบันทั้งหมด ' +
+          'รวมถึงบทที่คุณอ่านแล้วและคะแนนที่ทำไว้ตอนนี้</p>' +
+          '<div class="btn-row" style="margin-bottom:0">' +
+          '<button class="btn btn--primary" type="button" id="btn-import-confirm">ยืนยัน นำเข้าข้อมูล</button>' +
+          '<button class="btn" type="button" id="btn-import-cancel">ยกเลิก</button>' +
+          '</div>';
+        importPreview.appendChild(box);
+
+        document.getElementById('btn-import-confirm').addEventListener('click', function () {
+          var applied = storage.applyImport(text);
+          importPreview.innerHTML = '';
+          if (!applied.ok) {
+            showImportError(applied.error);
+            return;
+          }
+          clearImportError();
+          importFile.value = '';
+          var ok = el('div', 'callout callout--ok');
+          ok.innerHTML = '<div class="callout__head">' + window.LTK6.icon('check') +
+            '<span class="label">นำเข้าสำเร็จ</span></div>' +
+            '<p>นำเข้าแล้ว ' + applied.summary.read + ' รายการที่อ่าน และ ' +
+            applied.summary.quiz + ' ชุดคะแนน ตัวเลขด้านบนอัปเดตแล้ว</p>';
+          importPreview.appendChild(ok);
+          renderAll();
+          refreshShell();
+        });
+
+        document.getElementById('btn-import-cancel').addEventListener('click', function () {
+          importPreview.innerHTML = '';
+          importFile.value = '';
+          clearImportError();
+          importFile.focus();
+        });
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+
+    /* ---------- รีเซ็ต (ต้องยืนยัน) ---------- */
+
+    var resetBox = document.getElementById('reset-confirm');
+    var resetText = document.getElementById('reset-confirm-text');
+    var resetStart = document.getElementById('btn-reset-start');
+
+    resetStart.addEventListener('click', function () {
+      var readCount = storage.lessonsReadCount();
+      var attempted = LESSONS.filter(function (id) { return !!storage.getQuiz(id); }).length;
+      resetText.textContent = 'คุณกำลังจะลบเครื่องหมายอ่านแล้ว ' + readCount + ' บท ' +
+        'และคะแนนแบบทดสอบ ' + attempted + ' ชุด ออกจากเบราว์เซอร์นี้อย่างถาวร ' +
+        'การกระทำนี้ย้อนกลับไม่ได้';
+      resetBox.hidden = false;
+      resetStart.disabled = true;
+      document.getElementById('btn-reset-cancel').focus();
+    });
+
+    document.getElementById('btn-reset-cancel').addEventListener('click', function () {
+      resetBox.hidden = true;
+      resetStart.disabled = false;
+      resetStart.focus();
+    });
+
+    document.getElementById('btn-reset-confirm').addEventListener('click', function () {
+      storage.reset();
+      resetBox.hidden = true;
+      resetStart.disabled = false;
+      renderStorageState();
+      renderAll();
+      refreshShell();
+      var box = el('div', 'callout callout--ok');
+      box.innerHTML = '<div class="callout__head">' + window.LTK6.icon('check') +
+        '<span class="label">รีเซ็ตแล้ว</span></div>' +
+        '<p>ลบความคืบหน้าทั้งหมดในเบราว์เซอร์นี้ออกแล้ว ตัวเลขด้านบนกลับเป็นศูนย์</p>';
+      importPreview.innerHTML = '';
+      importPreview.appendChild(box);
+      resetStart.focus();
+    });
+
+    function refreshShell() {
+      if (window.LTK6.refreshShell) window.LTK6.refreshShell();
+    }
+
+    /* ---------- เริ่มทำงาน ---------- */
+
+    renderStorageState();
+    renderAll();
+    void quizSets;
+  });
+})();
+</script>
+
+</body>
+</html>

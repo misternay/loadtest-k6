@@ -1,0 +1,167 @@
+เสิร์ฟ site/ ที่ http://127.0.0.1:50221 (พอร์ตสุ่ม ไม่ชนกับ mock server)
+พบหน้าทั้งหมด 14 หน้า
+ตรวจที่ความกว้าง 360, 768, 1440 px × 2 ธีม = 84 ครั้ง
+
+Chromium: 153.0.8010.12
+Executable: /Users/ar677005/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+
+================================================================================================
+  ok    360px  light /examples.html  → 200, favicon 200, 137 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /glossary.html  → 200, favicon 200, 84 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /index.html  → 200, favicon 200, 146 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /lessons/01-tps.html  → 200, favicon 200, 142 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /lessons/02-vu.html  → 200, favicon 200, 147 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /lessons/03-metrics.html  → 200, favicon 200, 143 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /lessons/04-percentiles.html  → 200, favicon 200, 164 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /lessons/05-load-profiles.html  → 200, favicon 200, 149 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /lessons/06-read-results.html  → 200, favicon 200, 150 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /progress.html  → 200, favicon 200, 117 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /quiz.html  → 200, favicon 200, 83 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /tools/calculator.html  → 200, favicon 200, 102 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /tools/latency.html  → 200, favicon 200, 134 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  light /troubleshooting.html  → 200, favicon 200, 126 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /examples.html  → 200, favicon 200, 137 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /glossary.html  → 200, favicon 200, 84 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /index.html  → 200, favicon 200, 146 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /lessons/01-tps.html  → 200, favicon 200, 142 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /lessons/02-vu.html  → 200, favicon 200, 147 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /lessons/03-metrics.html  → 200, favicon 200, 143 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /lessons/04-percentiles.html  → 200, favicon 200, 164 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /lessons/05-load-profiles.html  → 200, favicon 200, 149 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /lessons/06-read-results.html  → 200, favicon 200, 150 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /progress.html  → 200, favicon 200, 117 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /quiz.html  → 200, favicon 200, 83 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /tools/calculator.html  → 200, favicon 200, 102 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /tools/latency.html  → 200, favicon 200, 134 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    360px  dark  /troubleshooting.html  → 200, favicon 200, 126 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /examples.html  → 200, favicon 200, 137 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /glossary.html  → 200, favicon 200, 84 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /index.html  → 200, favicon 200, 146 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /lessons/01-tps.html  → 200, favicon 200, 142 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /lessons/02-vu.html  → 200, favicon 200, 147 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /lessons/03-metrics.html  → 200, favicon 200, 143 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /lessons/04-percentiles.html  → 200, favicon 200, 164 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /lessons/05-load-profiles.html  → 200, favicon 200, 149 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /lessons/06-read-results.html  → 200, favicon 200, 150 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /progress.html  → 200, favicon 200, 117 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /quiz.html  → 200, favicon 200, 83 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /tools/calculator.html  → 200, favicon 200, 102 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /tools/latency.html  → 200, favicon 200, 134 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  light /troubleshooting.html  → 200, favicon 200, 126 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /examples.html  → 200, favicon 200, 137 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /glossary.html  → 200, favicon 200, 84 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /index.html  → 200, favicon 200, 146 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /lessons/01-tps.html  → 200, favicon 200, 142 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /lessons/02-vu.html  → 200, favicon 200, 147 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /lessons/03-metrics.html  → 200, favicon 200, 143 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /lessons/04-percentiles.html  → 200, favicon 200, 164 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /lessons/05-load-profiles.html  → 200, favicon 200, 149 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /lessons/06-read-results.html  → 200, favicon 200, 150 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /progress.html  → 200, favicon 200, 117 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /quiz.html  → 200, favicon 200, 83 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /tools/calculator.html  → 200, favicon 200, 102 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /tools/latency.html  → 200, favicon 200, 134 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok    768px  dark  /troubleshooting.html  → 200, favicon 200, 126 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /examples.html  → 200, favicon 200, 137 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /glossary.html  → 200, favicon 200, 84 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /index.html  → 200, favicon 200, 146 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /lessons/01-tps.html  → 200, favicon 200, 142 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /lessons/02-vu.html  → 200, favicon 200, 147 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /lessons/03-metrics.html  → 200, favicon 200, 143 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /lessons/04-percentiles.html  → 200, favicon 200, 164 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /lessons/05-load-profiles.html  → 200, favicon 200, 149 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /lessons/06-read-results.html  → 200, favicon 200, 150 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /progress.html  → 200, favicon 200, 117 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /quiz.html  → 200, favicon 200, 83 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /tools/calculator.html  → 200, favicon 200, 102 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /tools/latency.html  → 200, favicon 200, 134 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  light /troubleshooting.html  → 200, favicon 200, 126 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /examples.html  → 200, favicon 200, 137 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /glossary.html  → 200, favicon 200, 84 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /index.html  → 200, favicon 200, 146 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /lessons/01-tps.html  → 200, favicon 200, 142 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /lessons/02-vu.html  → 200, favicon 200, 147 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /lessons/03-metrics.html  → 200, favicon 200, 143 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /lessons/04-percentiles.html  → 200, favicon 200, 164 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /lessons/05-load-profiles.html  → 200, favicon 200, 149 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /lessons/06-read-results.html  → 200, favicon 200, 150 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /progress.html  → 200, favicon 200, 117 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /quiz.html  → 200, favicon 200, 83 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /tools/calculator.html  → 200, favicon 200, 102 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /tools/latency.html  → 200, favicon 200, 134 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+  ok   1440px  dark  /troubleshooting.html  → 200, favicon 200, 126 จุดคอนทราสต์, ไม่มี error, ไม่มี overflow
+
+================================================================================================
+ตรวจปุ่มสลับธีม (กดจริง → บันทึกจริง → รีเฟรชแล้วยังอยู่) และการตั้งธีมก่อนวาด
+================================================================================================
+  ok   /examples.html                   เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /glossary.html                   เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /index.html                      เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /lessons/01-tps.html             เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /lessons/02-vu.html              เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /lessons/03-metrics.html         เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /lessons/04-percentiles.html     เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /lessons/05-load-profiles.html   เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /lessons/06-read-results.html    เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /progress.html                   เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /quiz.html                       เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /tools/calculator.html           เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /tools/latency.html              เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+  ok   /troubleshooting.html            เริ่ม=null กด="dark" เก็บ="dark" รีเฟรช="dark" พื้นหลัง rgb(251, 251, 250) → rgb(17, 21, 27)
+
+================================================================================================
+ตรวจว่าธีมถูกตั้งก่อนวาดครั้งแรก (บันทึกค่าที่ animation frame แรก ซึ่งเกิดก่อน paint)
+================================================================================================
+  ok   ธีม light → ตรงทุกหน้า (14/14), พื้นหลังที่เฟรมแรก: rgb(251, 251, 250)
+  ok   ธีม dark  → ตรงทุกหน้า (14/14), พื้นหลังที่เฟรมแรก: rgb(17, 21, 27)
+
+================================================================================================
+สรุปผลคอนทราสต์ — ค่าแย่ที่สุดของแต่ละกลุ่มข้อความ แยกตามธีม (รวมทุกหน้า ทุกความกว้าง)
+================================================================================================
+  กลุ่มข้อความ            ธีม    จุดที่ตรวจ  แย่ที่สุด  ต้องได้   ตัวอย่างที่แย่ที่สุด
+  ----------------------------------------------------------------------------------------------
+  ข้อความเนื้อความ        light        1611     5.22:1    4.5:1   ok   p.eyebrow 11.52px/600 rgb(98, 107, 119) บน rgb(251, 251, 250)
+  ข้อความรอง              light         390     5.22:1    4.5:1   ok   p.eyebrow 11.52px/600 rgb(98, 107, 119) บน rgb(251, 251, 250)
+  ลิงก์                   light         867    10.18:1    4.5:1   ok   a 13.12px/400 rgb(57, 66, 78) บน rgb(255, 255, 255)
+  โค้ดในบล็อก             light         231     9.22:1    4.5:1   ok   pre.faq__symptom 12.64px/400 rgb(57, 66, 78) บน rgb(243, 244, 242)
+  หัวตาราง                light         648     4.89:1    4.5:1   ok   caption 12.64px/400 rgb(98, 107, 119) บน rgb(243, 244, 242)
+  ป้ายในบล็อกเน้น         light         282     5.26:1    4.5:1   ok   span.label 11.44px/600 rgb(138, 90, 6) บน rgb(247, 241, 227)
+  ใจความสำคัญ/จุดที่ต้องจำlight         213    15.85:1    4.5:1   ok   p.keypoint 16px/600 rgb(20, 26, 34) บน rgb(243, 244, 242)
+  ข้อความในตาราง          light        1230    15.11:1    4.5:1   ok   td.code-cell 12.8px/400 rgb(20, 26, 34) บน rgb(233, 239, 246)
+
+  ข้อความเนื้อความ        dark         1611     6.49:1    4.5:1   ok   p.chart-caption 12.8px/400 rgb(154, 165, 179) บน rgb(26, 33, 42)
+  ข้อความรอง              dark          390     6.49:1    4.5:1   ok   span.muted 11.628px/400 rgb(154, 165, 179) บน rgb(26, 33, 42)
+  ลิงก์                   dark          867     9.81:1    4.5:1   ok   a 13.12px/400 rgb(194, 202, 213) บน rgb(26, 33, 42)
+  โค้ดในบล็อก             dark          231     9.81:1    4.5:1   ok   code 12.8px/400 rgb(194, 202, 213) บน rgb(26, 33, 42)
+  หัวตาราง                dark          648     6.79:1    4.5:1   ok   caption 12.64px/400 rgb(154, 165, 179) บน rgb(23, 29, 37)
+  ป้ายในบล็อกเน้น         dark          282     6.49:1    4.5:1   ok   span.faq__tag 11.2px/600 rgb(154, 165, 179) บน rgb(26, 33, 42)
+  ใจความสำคัญ/จุดที่ต้องจำdark          213    13.19:1    4.5:1   ok   span.key-figure 16px/600 rgb(228, 232, 238) บน rgb(26, 33, 42)
+  ข้อความในตาราง          dark         1230    11.75:1    4.5:1   ok   td.code-cell 12.8px/400 rgb(228, 232, 238) บน rgb(27, 43, 58)
+
+  เกณฑ์: 4.5:1 สำหรับข้อความปกติ · 3:1 สำหรับตัวใหญ่ ≥24px หรือตัวหนา ≥18.66px
+
+================================================================================================
+สรุปผลการตรวจด้วยเบราว์เซอร์จริง
+  จำนวนหน้าที่ตรวจ        : 14 หน้า × 3 ความกว้าง × 2 ธีม = 84 ครั้ง
+  Chromium เวอร์ชัน        : 153.0.8010.12
+  หน้าที่ไม่ใช่ 200        : 0
+  favicon ที่โหลดได้ 200   : 84 จาก 84 ครั้ง
+  พาธ favicon ที่พบ        : favicon.svg, ../favicon.svg
+  คำขอ /favicon.ico        : 0 (ไม่มีเลย)
+  console error ทั้งหมด     : 0
+  page error ทั้งหมด        : 0
+  คำขอที่ล้มเหลว/4xx-5xx    : 0
+  หน้าที่มี overflow แนวนอน : 0
+  จุดคอนทราสต์ที่ตรวจ       : 10944
+  คอนทราสต์ที่ไม่ผ่าน       : 0
+  ปุ่มสลับธีมที่ไม่ผ่าน     : 0 จาก 14 หน้า
+  หน้าที่ตั้งธีมไม่ทันก่อนวาด: 0
+  พื้นหลัง body ต่อธีม      : light = rgb(251, 251, 250) · dark = rgb(17, 21, 27)
+  รวมหน้าที่มีปัญหา        : 0
+
+
+ผลลัพธ์: ผ่านทั้งหมด — ทุกหน้า 200 ไม่มี console/page error ไม่มี 404 ไม่มี overflow
+         favicon.svg ตอบ 200 ทุกครั้ง ไม่มีคำขอ favicon.ico
+         คอนทราสต์ผ่านเกณฑ์ WCAG ทั้งโหมดสว่างและโหมดมืด
+         ปุ่มสลับธีมทำงานจริงทุกหน้า จำค่าได้หลังรีเฟรช และธีมถูกตั้งก่อนวาด
+

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บทที่ 1 — คำนวณ TPS / RPS | Load Testing ด้วย k6</title>
+<meta name="description" content="สูตรคำนวณ TPS และ RPS จากจำนวน virtual user เวลาตอบสนอง และ think time พร้อมตัวอย่างแทนค่าทีละขั้นจากผลการรัน k6 จริง และข้อผิดพลาดที่ทำให้ตัวเลขสูงเกินจริง">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="01-tps" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูนำทางและสารบัญในหน้านี้สร้างด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งานเมนู
+    เนื้อหาบทเรียนยังอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><circle cx="10" cy="10" r="6.6"/><circle cx="10" cy="10" r="2.6"/></svg>
+      บทที่ 1 จาก 6
+    </p>
+
+    <h1>คำนวณ TPS / RPS ให้ตรงกับที่ k6 วัดได้</h1>
+
+    <p class="lede">
+      อัตราการประมวลผลของระบบเท่ากับจำนวนงานที่สำเร็จหารด้วยเวลาที่ใช้จริง และคำนวณล่วงหน้า
+      จากจำนวน VU กับเวลาที่หนึ่งรอบใช้ไป ถ้าสองทางให้ค่าไม่ตรงกัน แปลว่ามีตัวแปรที่ถูกละไว้
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ใช้เวลาอ่านประมาณ 18 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ต้องอ่านก่อน: ไม่มี
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 4.4h11.2L10 10l5.6 5.6H4.4"/></svg>
+        ต้องมี: <a href="../tools/calculator.html">เครื่องคำนวณ</a>
+      </div>
+    </div>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>RPS นับคำขอ HTTP แต่ TPS นับธุรกรรมที่อาจกินหลายคำขอ สองค่าจึงเทียบกันไม่ได้ถ้าไม่รู้จำนวนคำขอต่อรอบ</li>
+        <li>หนึ่งรอบของ VU ใช้เวลา (R × Rt) + Tt think time จึงกำหนด throughput พอ ๆ กับความเร็วเซิร์ฟเวอร์</li>
+        <li>การแทน <code>http_req_duration</code> ในสูตรแทน <code>iteration_duration</code> ให้ค่าสูงเกินจริง 1.94 เท่า</li>
+        <li>ตัวเลขที่คำนวณด้วยมือกับที่ k6 รายงานต่างกันเล็กน้อย เพราะสูตรสมมติว่า VU ทำงานเต็มเวลาเสมอ</li>
+      </ol>
+    </div>
+
+    <h2 id="definitions">TPS, RPS และ iterations/s ต่างกันอย่างไร</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>คำที่ใช้บ่อยและความหมายที่ตรงกับ metric ของ k6</caption>
+        <thead>
+          <tr>
+            <th>คำ</th>
+            <th class="wrap">นับอะไร</th>
+            <th class="wrap">metric ที่ตรงกันใน k6</th>
+            <th class="wrap">ใช้เมื่อไหร่</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">RPS</td>
+            <td class="wrap">จำนวนคำขอ HTTP ที่สำเร็จต่อวินาที</td>
+            <td class="wrap"><code>http_reqs</code></td>
+            <td class="wrap">ใช้เป็นค่าเริ่มต้น เพราะตรงกับสิ่งที่ k6 รายงานตรง ๆ</td>
+          </tr>
+          <tr>
+            <td class="code-cell">TPS</td>
+            <td class="wrap">จำนวนธุรกรรมที่สำเร็จต่อวินาที โดยหนึ่งธุรกรรมอาจกินหลายคำขอ</td>
+            <td class="wrap"><code>iterations</code> เมื่อหนึ่งรอบเท่ากับหนึ่งธุรกรรม</td>
+            <td class="wrap">ใช้เมื่อคุยกับฝ่ายธุรกิจที่คิดเป็น "ออร์เดอร์ต่อวินาที" หรือ "การจองต่อนาที"</td>
+          </tr>
+          <tr>
+            <td class="code-cell">iterations/s</td>
+            <td class="wrap">จำนวนรอบของฟังก์ชัน <code>default()</code> ที่จบต่อวินาที</td>
+            <td class="wrap"><code>iterations</code> และ <code>iteration_duration</code></td>
+            <td class="wrap">ใช้เป็นตัวกลางในการคำนวณ เพราะเป็นหน่วยที่ผูกกับ VU โดยตรง</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">เลือกคำให้ตรงกับงาน</span>
+      </div>
+      <p>
+        ถ้าหนึ่งรอบยิงหนึ่งคำขอ คำทั้งสามให้ตัวเลขเดียวกัน แต่ถ้าหนึ่งรอบยิงห้าคำขอ
+        ค่า RPS จะมากกว่า TPS ห้าเท่า รายงาน "ได้ 500 TPS" จึงต้องบอกจำนวนคำขอต่อรอบ
+      </p>
+    </div>
+
+    <h2 id="formula">สูตรหลัก และการตรวจสอบกับผลที่ k6 รายงาน</h2>
+
+    <div class="working">
+      <span class="w-line">TPS = จำนวน request ที่สำเร็จ ÷ เวลาที่ใช้จริง (วินาที)</span>
+    </div>
+
+    <p>
+      การรันครั้งนี้ตั้งค่า 10 VUs 12 วินาที k6 รายงาน 1,155 คำขอ ใช้เวลารันจริง 12.36 วินาที
+      มากกว่า 12 เพราะรอให้รอบสุดท้ายจบก่อนสรุปผล
+    </p>
+
+    <div class="working">
+      <span class="w-line">TPS = 1,155 ÷ 12.36</span>
+      <span class="w-line w-label">    = 93.45 request/s</span>
+      <span class="w-line w-result">k6 รายงาน: http_reqs 1,155  93.44/s</span>
+    </div>
+
+    <p>
+      สองค่าต่างกัน 0.01 request/s จากการปัดเศษของระยะเวลา 12.36 วินาที ให้ใช้ค่าที่ k6 รายงาน
+    </p>
+
+    <div class="callout callout--evidence">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+        <span class="label">หลักฐานจริง</span>
+      </div>
+      <p>
+        การรัน k6 v2.2.0 ด้วย 10 VUs 12 วินาที ได้ 1,155 request ใช้เวลารันจริง 12.36 วินาที
+        ดังนั้น 1,155 ÷ 12.36 = 93.45 request/s ขณะที่ k6 รายงาน <code>http_reqs: 1,155 93.44/s</code>
+        ต่างกันไม่ถึง 0.02%
+      </p>
+    </div>
+
+    <h2 id="closed-model">แบบจำลองปิด: หนึ่งรอบใช้เวลาเท่าไร</h2>
+
+    <p>
+      หนึ่งรอบของ <code>default()</code> มีสองก้อน: เวลารอคำตอบของทุกคำขอ
+      และ think time ที่สั่งให้ VU หยุดรอด้วย <code>sleep()</code>
+    </p>
+
+    <div class="working">
+      <span class="w-line">iteration_duration = (จำนวน request ต่อรอบ × เวลาตอบสนองเฉลี่ย) + think time</span>
+      <span class="w-line">iterations/s       = จำนวน VU ÷ (iteration_duration เป็นวินาที)</span>
+      <span class="w-line">TPS                = iterations/s × จำนวน request ต่อรอบ</span>
+    </div>
+
+    <div class="working">
+      <span class="w-line">        N × R × 1000</span>
+      <span class="w-line">TPS = ─────────────────────</span>
+      <span class="w-line">        R × Rt + Tt</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">N  = จำนวน VU</span>
+      <span class="w-line w-label">R  = จำนวน request ต่อ 1 iteration</span>
+      <span class="w-line w-label">Rt = เวลาตอบสนองเฉลี่ยต่อ request (มิลลิวินาที)</span>
+      <span class="w-line w-label">Tt = think time ต่อ iteration (มิลลิวินาที)</span>
+    </div>
+
+    <h2 id="key-evidence">หลักฐานที่สำคัญที่สุดในบทนี้</h2>
+
+    <p>
+      การรันของเราได้ <code>iteration_duration</code> เฉลี่ย <span class="key-figure">105.38</span> ms และ
+      <code>http_req_duration</code> เฉลี่ย <span class="key-figure">54.25</span> ms สคริปต์มี <code>sleep(0.05)</code> หนึ่งจุด
+      ส่วนต่าง 105.38 − 54.25 = 51.13 ms คือ think time 50 ms บวกค่าใช้จ่ายของสคริปต์
+    </p>
+
+    <div class="working">
+      <span class="w-line w-label">ใช้ iteration_duration (ถูกต้อง)</span>
+      <span class="w-line">10 ÷ 0.10538 = 94.89 iterations/s</span>
+      <span class="w-line">→ TPS = 94.89 × 1 = 94.89 request/s</span>
+      <span class="w-line w-label">เทียบกับที่ k6 รายงาน 93.44/s   ต่างกัน 1.5%</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">ใช้ http_req_duration (ผิด)</span>
+      <span class="w-line">10 ÷ 0.05425 = 184.33 iterations/s</span>
+      <span class="w-line w-result">→ สูงเกินจริง 1.94 เท่า</span>
+    </div>
+
+    <p class="keypoint">การใช้ <code>http_req_duration</code> แทน <code>iteration_duration</code> ให้ค่าสูงเกินจริง <span class="key-figure">1.94</span> เท่า เพราะเวลาครึ่งหนึ่งของ VU คือการนอนรอ</p>
+
+    <div class="working">
+      <span class="w-line w-label">เวลาที่ VU ใช้จริงทั้งสิ้น</span>
+      <span class="w-line">1,155 iterations × 105.3892 ms = 121,724.5 ms = 121.72 วินาที</span>
+      <span class="w-line w-label">เวลานาฬิกาที่มีให้ใช้</span>
+      <span class="w-line">12.36 วินาที × 10 VUs = 123.60 วินาที</span>
+      <span class="w-line w-label">สัดส่วนที่ VU ทำงานจริง</span>
+      <span class="w-line">121.72 ÷ 123.60 = 0.985 หรือ 98.5%</span>
+      <span class="w-line w-result">94.89 × 0.985 = 93.45 iterations/s  → ตรงกับ 93.44 ที่ k6 รายงาน</span>
+    </div>
+
+    <p>
+      ที่ไม่ถึง 100% เพราะช่วงต้นและท้ายของการรัน VU บางตัวยังไม่เริ่มหรือหยุดไปแล้ว
+      สูตรแบบง่ายจึงให้ค่าสูงกว่าความจริงเล็กน้อย
+    </p>
+
+    <h2 id="worked-examples">ตัวอย่างคำนวณทีละขั้น</h2>
+
+    <h3 id="example-1">ตัวอย่างที่ 1 — มี VU แต่ไม่มี think time</h3>
+
+    <p>N = 10 VUs, R = 1, Rt = 100 ms, Tt = 0 ms</p>
+
+    <div class="working">
+      <span class="w-line">iteration_duration = (R × Rt) + Tt</span>
+      <span class="w-line w-label">                 = (1 × 100) + 0</span>
+      <span class="w-line">                 = 100 ms = 0.100 วินาที</span>
+      <span class="w-line"></span>
+      <span class="w-line">iterations/s     = 10 ÷ 0.100</span>
+      <span class="w-line">                 = 100 iterations/s</span>
+      <span class="w-line"></span>
+      <span class="w-line w-result">TPS              = 100 × 1 = 100 request/s</span>
+    </div>
+
+    <p>เคสนี้คือขอบเขตบนทางทฤษฎี เพราะ VU ยิงคำขอต่อเนื่องไม่หยุดพัก</p>
+
+    <h3 id="example-2">ตัวอย่างที่ 2 — เพิ่ม think time เข้าไป</h3>
+
+    <p>N = 10 VUs, R = 1, Rt = 100 ms, Tt = 200 ms</p>
+
+    <div class="working">
+      <span class="w-line">iteration_duration = (1 × 100) + 200</span>
+      <span class="w-line">                 = 300 ms = 0.300 วินาที</span>
+      <span class="w-line"></span>
+      <span class="w-line">iterations/s     = 10 ÷ 0.300</span>
+      <span class="w-line">                 = 33.33 iterations/s</span>
+      <span class="w-line"></span>
+      <span class="w-line w-result">TPS              = 33.33 × 1 = 33.3 request/s</span>
+    </div>
+
+    <p>
+      เทียบกับตัวอย่างที่ 1 think time 200 ms ทำให้ throughput ลดจาก 100 เหลือ 33.3 หรือหนึ่งในสาม
+      ทั้งที่จำนวน VU และความเร็วเซิร์ฟเวอร์ไม่ได้เปลี่ยน
+    </p>
+
+    <h3 id="example-3">ตัวอย่างที่ 3 — หนึ่งรอบยิงหลายคำขอ</h3>
+
+    <p>N = 10 VUs, R = 3 requests ต่อรอบ, Rt = 50 ms, Tt = 100 ms</p>
+
+    <div class="working">
+      <span class="w-line">iteration_duration = (3 × 50) + 100</span>
+      <span class="w-line">                 = 250 ms = 0.250 วินาที</span>
+      <span class="w-line"></span>
+      <span class="w-line">iterations/s     = 10 ÷ 0.250</span>
+      <span class="w-line">                 = 40 iterations/s</span>
+      <span class="w-line"></span>
+      <span class="w-line w-result">TPS              = 40 × 3 = 120 request/s</span>
+    </div>
+
+    <p>
+      ข้อสังเกตคือ iterations/s ลดลงเหลือ 40 จาก 100 ในตัวอย่างแรก แต่ TPS เพิ่มเป็น 120
+      เพราะแต่ละรอบยิงสามคำขอ การดูแค่ iterations/s โดยไม่รู้ค่า R จะสรุปว่าระบบช้าลง
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เปรียบเทียบสามตัวอย่างที่แทนค่าแล้ว</caption>
+        <thead>
+          <tr>
+            <th>พารามิเตอร์</th>
+            <th class="num">ตัวอย่าง 1</th>
+            <th class="num">ตัวอย่าง 2</th>
+            <th class="num">ตัวอย่าง 3</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>N (VUs)</td>
+            <td class="num">10</td><td class="num">10</td><td class="num">10</td>
+          </tr>
+          <tr>
+            <td>R (requests/รอบ)</td>
+            <td class="num">1</td><td class="num">1</td><td class="num">3</td>
+          </tr>
+          <tr>
+            <td>Rt (ms)</td>
+            <td class="num">100</td><td class="num">100</td><td class="num">50</td>
+          </tr>
+          <tr>
+            <td>Tt (ms)</td>
+            <td class="num">0</td><td class="num">200</td><td class="num">100</td>
+          </tr>
+          <tr class="row-accent">
+            <td>iteration_duration (ms)</td>
+            <td class="num">100</td><td class="num">300</td><td class="num">250</td>
+          </tr>
+          <tr>
+            <td>iterations/s</td>
+            <td class="num">100</td><td class="num">33.33</td><td class="num">40</td>
+          </tr>
+          <tr class="row-signal">
+            <td>TPS (request/s)</td>
+            <td class="num">100</td><td class="num">33.3</td><td class="num">120</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ตัวเลขทั้งสามแถวคำนวณจากการแทนค่าในสูตร closed model ไม่ใช่ผลการวัดจริง
+      ลองแทนค่าอื่นได้ที่ <a href="../tools/calculator.html">เครื่องคำนวณ TPS</a>
+    </p>
+
+    <h2 id="reverse">คำนวณย้อนกลับ: ต้องใช้ VU เท่าไร</h2>
+
+    <p>
+      เป้าหมาย 500 request/s ต้องตั้ง VU เท่าไร หาได้โดยหารเป้าหมายด้วยกำลังผลิตของ VU แล้วปัดขึ้น
+    </p>
+
+    <div class="working">
+      <span class="w-line">                    R × 1000</span>
+      <span class="w-line">TPS ต่อ VU หนึ่งตัว = ─────────────────</span>
+      <span class="w-line">                    R × Rt + Tt</span>
+      <span class="w-line"></span>
+      <span class="w-line">จำนวน VU = ⌈TPS เป้าหมาย ÷ TPS ต่อ VU⌉</span>
+    </div>
+
+    <h3 id="reverse-example">ตัวอย่าง — เป้าหมาย 500 request/s</h3>
+
+    <p>R = 1, Rt = 50 ms, Tt = 150 ms</p>
+
+    <div class="working">
+      <span class="w-line">iteration_duration = (1 × 50) + 150 = 200 ms</span>
+      <span class="w-line w-label">                    หนึ่งรอบใช้เวลา 0.2 วินาที</span>
+      <span class="w-line"></span>
+      <span class="w-line">TPS ต่อ VU         = 1 × 1000 ÷ 200</span>
+      <span class="w-line">                   = 5 request/s ต่อ VU</span>
+      <span class="w-line"></span>
+      <span class="w-line">จำนวน VU           = ⌈500 ÷ 5⌉</span>
+      <span class="w-line w-result">                   = 100 VUs</span>
+    </div>
+
+    <p>
+      ถ้าลืม think time 150 ms แล้วใช้แค่ Rt = 50 ms จะได้ 1,000 ÷ 50 = 20 request/s ต่อ VU
+      แล้วสรุปว่าต้องใช้ ⌈500 ÷ 20⌉ = 25 VUs ซึ่งสร้างโหลดได้เพียง 125 request/s ขาดเป้าไป 75%
+    </p>
+
+    <div class="callout callout--evidence">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+        <span class="label">ตรวจสอบย้อนกลับกับข้อมูลจริง</span>
+      </div>
+      <p>
+        สูตรนี้ใช้ได้กับผลที่วัดได้จริง แทนค่า Rt = 54.25 ms และ Tt = 50 ms
+        จะได้ iteration_duration = 104.25 ms ใกล้เคียงกับ 105.38 ms ที่วัดได้
+        ส่วนต่าง 1.13 ms คือค่าใช้จ่ายของสคริปต์เอง
+      </p>
+    </div>
+
+    <h2 id="littles-law">กฎของ Little: เชื่อม throughput เข้ากับจำนวนงานที่ลอยอยู่</h2>
+
+    <p>
+      กฎของ Little: จำนวนงานในระบบพร้อมกันเท่ากับอัตราที่งานไหลเข้าคูณเวลาที่งานแต่ละชิ้นใช้
+    </p>
+
+    <div class="working">
+      <span class="w-line">N = อัตราการเกิดงาน × เวลาที่งานนั้นกินอยู่</span>
+      <span class="w-line w-label">ในหน่วยของเรา: N (จำนวนงานที่ลอยอยู่) = TPS × เวลาต่อรอบ (วินาที)</span>
+    </div>
+
+    <div class="working">
+      <span class="w-line">request ที่ลอยพร้อมกัน = TPS × Rt (วินาที)</span>
+      <span class="w-line w-label">                     = 93.44 × 0.05425</span>
+      <span class="w-line w-result">                     = 5.07 request</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">และถ้าดูที่ระดับรอบของ VU</span>
+      <span class="w-line">VU ที่ต้องใช้         = iterations/s × iteration_duration (วินาที)</span>
+      <span class="w-line">                     = 94.89 × 0.10538</span>
+      <span class="w-line w-result">                     = 10.0 VUs</span>
+    </div>
+
+    <p>
+      จึงตั้ง 10 VU แต่มีคำขอลอยในระบบจริงเพียง <span class="key-figure">5.07</span> คำขอ
+      เพราะอีกครึ่งหนึ่งของเวลา VU ทั้งสิบตัวนอนรอตามที่เราสั่งด้วย <code>sleep()</code>
+      สัดส่วนเวลาที่ถูกจองโดยการรอคำตอบคือ 54.25 ÷ 105.38 = <span class="key-figure">51.5%</span>
+      ที่เหลือ 48.5% คือ think time
+    </p>
+
+    <ul>
+      <li>ใช้ได้กับค่าเฉลี่ยของเวลาต่อรอบ และเฉพาะช่วงที่ระบบคงตัว ไม่ใช่ช่วง ramp-up</li>
+      <li>ถ้าหนึ่งรอบยิงหลายคำขอพร้อมกัน ต้องนับคำขอที่ลอยพร้อมกันแยกจากจำนวน VU</li>
+      <li>กฎนี้บอกความสัมพันธ์ ไม่ได้บอกว่า VU เท่าไร "เพียงพอ" ขึ้นกับ latency ที่ยอมรับ</li>
+      <li>ถ้าคำนวณแล้วได้ VU ไม่ตรงกับที่ตั้งไว้ ให้ตรวจงานอื่นในรอบที่ไม่ได้นับ</li>
+    </ul>
+
+    <h2 id="three-way">ความสัมพันธ์ของ throughput, concurrency และ latency</h2>
+
+    <div class="working">
+      <span class="w-line">throughput = concurrency ÷ latency</span>
+      <span class="w-line w-label">จำนวนงานที่ทำได้ต่อวินาที = จำนวนงานที่ทำพร้อมกัน ÷ เวลาที่แต่ละงานใช้</span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เมื่อขยับตัวแปรหนึ่ง ตัวอื่นเปลี่ยนตามอย่างไร</caption>
+        <thead>
+          <tr>
+            <th class="wrap">สิ่งที่ทำ</th>
+            <th class="wrap">throughput</th>
+            <th class="wrap">latency</th>
+            <th class="wrap">ความหมายที่แท้จริง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">เพิ่ม VU ในช่วงที่ระบบยังว่าง</td>
+            <td class="wrap">เพิ่มขึ้นเกือบเป็นสัดส่วน</td>
+            <td class="wrap">แทบไม่เปลี่ยน</td>
+            <td class="wrap">ยังมีกำลังเหลือ ยังไม่ถึงคอขวด</td>
+          </tr>
+          <tr>
+            <td class="wrap">เพิ่ม VU หลังผ่านจุดอิ่มตัว</td>
+            <td class="wrap">ทรงตัวหรือลดลง</td>
+            <td class="wrap">พุ่งขึ้น</td>
+            <td class="wrap">กลายเป็นการต่อคิวให้ยาวขึ้น ไม่ได้ทำงานได้เร็วขึ้น</td>
+          </tr>
+          <tr>
+            <td class="wrap">ทำให้แต่ละงานเร็วขึ้นเท่าตัว</td>
+            <td class="wrap">เพิ่มขึ้นเท่าตัวถ้ายังไม่ติดคอขวด</td>
+            <td class="wrap">ลดลง</td>
+            <td class="wrap">กำไรจริง แต่ต้องแก้ที่คอขวดที่ถูกตัว</td>
+          </tr>
+          <tr>
+            <td class="wrap">เพิ่ม think time</td>
+            <td class="wrap">ลดลง</td>
+            <td class="wrap">เท่าเดิม</td>
+            <td class="wrap">ระบบไม่ได้ช้าลง แต่เราสร้างภาระน้อยลง</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="mistakes">ข้อผิดพลาดที่พบบ่อย</h2>
+
+    <ol>
+      <li>
+        <strong>คำนวณจากค่าเฉลี่ยแล้วเทียบกับ SLO ที่เขียนด้วย p95</strong>
+        ถ้า SLO คือ p95 ต่ำกว่า 300 ms การนำค่าเฉลี่ยมาคำนวณ VU จะได้จำนวนน้อยเกินไป
+        เพราะค่าเฉลี่ยต่ำกว่า p95 เสมอในระบบที่มีหาง
+        ในการรันของเรา ค่าเฉลี่ย 54.25 ms แต่ p95 คือ 74.53 ms ต่างกัน 37%
+      </li>
+      <li>
+        <strong>ลืม think time</strong>
+        เป็นข้อผิดพลาดที่แพงที่สุด ตามที่คำนวณไว้ข้างต้นว่าทำให้ประเมิน VU ขาดไปถึง 75%
+        ให้เปิดดู <code>iteration_duration</code> เพื่อยืนยันว่าค่าที่ใช้รวม think time แล้วจริง
+      </li>
+      <li>
+        <strong>นับคำขอที่ล้มเหลวเป็น throughput</strong>
+        <code>http_reqs</code> ของ k6 นับรวมคำขอที่ได้ 500 แม้ว่า <code>http_req_failed</code> จะรายงานว่าล้มเหลว
+        ตัวเลข 93.44 request/s จึงต้องอ่านคู่กับ <code>http_req_failed</code> เสมอ
+        ถ้าล้มเหลว 30% แปลว่ามีคำขอที่ได้ผลจริงเพียง 65 request/s
+      </li>
+      <li>
+        <strong>รวมช่วง ramp-up และ warm-up เข้าไปคิด</strong>
+        ช่วงต้นที่ VU ยังเพิ่มไม่ครบและระบบยังอุ่นไม่เสร็จ จะดึงค่าเฉลี่ยให้ต่ำกว่าความจริง
+        วิธีที่ถูกคือคำนวณ throughput เฉพาะช่วง steady state เช่นแยกช่วงนั้นเป็น
+        scenario ของตัวเองแล้ววัดจากแท็ก <code>scenario</code> หรือส่งออกข้อมูลดิบ
+        แล้วเลือกช่วงเวลาเอง สังเกตว่า <code>delayAbortEval</code> ไม่ช่วยเรื่องนี้
+        เพราะมันเลื่อนแค่เวลาที่ k6 จะตัดสินใจหยุด ไม่ได้ตัดข้อมูลออกจากค่าเฉลี่ยที่รายงาน
+      </li>
+      <li>
+        <strong>เข้าใจผิดว่า TPS คือความจุของระบบ</strong>
+        ตัวเลขที่วัดได้เป็นผลรวมของหลายอย่างพร้อมกัน คือความเร็วของระบบปลายทาง
+        ความเร็วของเครือข่าย ประสิทธิภาพของสคริปต์ และกำลังของเครื่องที่รัน k6
+        การเปลี่ยนเครื่องทดสอบจึงเปลี่ยนตัวเลขได้โดยที่ระบบปลายทางไม่ได้เปลี่ยนอะไรเลย
+      </li>
+      <li>
+        <strong>เครื่องทดสอบเป็นคอขวดเองโดยไม่รู้ตัว</strong>
+        ถ้าเห็น <code>dropped_iterations</code> มากกว่า 0 หรือ CPU ของเครื่องที่รัน k6 แตะ 100%
+        แปลว่าเรากำลังวัดขีดจำกัดของเครื่องทดสอบ ไม่ใช่ของระบบ
+        ให้ลดจำนวน VU ลงแล้วเพิ่มเครื่องทดสอบก่อนตีความผล
+      </li>
+      <li>
+        <strong>ไม่ปิดหรือเปิด connection reuse อย่างตั้งใจ</strong>
+        k6 ใช้ keep-alive โดยค่าเริ่มต้น ซึ่งทำให้ตัวเลขดีกว่าประสบการณ์ของผู้ใช้จริงที่เพิ่งเปิดเบราว์เซอร์
+        ควรทดลอง <code>--no-connection-reuse</code> เพื่อดูว่าผลต่างกันแค่ไหน
+        ถ้าต่างกันมาก แปลว่าค่า handshake มีนัยสำคัญต่อ latency จริง
+      </li>
+      <li>
+        <strong>นับ iterations เป็น TPS ทั้งที่หนึ่งรอบยิงหลายคำขอ</strong>
+        ตามตัวอย่างที่ 3 ข้างต้น iterations/s 40 ไม่เท่ากับ TPS 120
+        ต้องคูณด้วยจำนวนคำขอต่อรอบเสมอ และควรระบุจำนวนนั้นไว้ในรายงานด้วย
+      </li>
+      <li>
+        <strong>ใช้ระยะเวลาที่ตั้งใน stages แทนเวลาที่ใช้จริง</strong>
+        ถ้าตั้ง <code>duration: '12s'</code> อย่าหารด้วย 12 ให้หารด้วยเวลาที่ k6 รายงาน
+        เพราะมันมากกว่าเสมอตามที่เห็นว่า 12 วินาที กลายเป็น 12.36 วินาที
+      </li>
+    </ol>
+
+    <h2 id="summary">สรุปบทที่ 1</h2>
+
+    <ul>
+      <li><code>TPS = จำนวน request ที่สำเร็จ ÷ เวลาที่ใช้จริง (วินาที)</code> ต้องตรวจกับค่าที่ k6 รายงานเสมอ</li>
+      <li>หนึ่งรอบใช้เวลา <code>(R × Rt) + Tt</code> โดย Rt คือเวลาตอบสนอง และ Tt คือ think time</li>
+      <li>
+        <code>iteration_duration</code> 105.38 ms ให้ 94.89 iterations/s ตรงกับ 93.44 ที่ k6 รายงาน
+      </li>
+      <li>คำนวณย้อนกลับด้วย <code>VU = ⌈TPS เป้าหมาย ÷ TPS ต่อ VU⌉</code> แล้วปัดขึ้นเสมอ</li>
+      <li>กฎของ Little: คำขอที่ลอยจริงมีเพียง 5.07 คำขอ จาก VU ทั้งหมด 10 ตัว</li>
+      <li>ระวังการลืม think time และค่าเฉลี่ยที่ใช้ขณะ SLO เขียนด้วย p95</li>
+    </ul>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.2" y="2.8" width="11.6" height="14.4" rx="1.4"/><path d="M7 6.4h6M7.4 10h.01M10 10h.01M12.6 10h.01M7.4 13h.01M10 13h.01M12.6 13h.01"/></svg>
+        <span class="label">ลองเอง</span>
+      </div>
+      <p>
+        เปิด <a href="../tools/calculator.html">เครื่องคำนวณ TPS และ VU</a> แล้วใส่ค่าจากตัวอย่างทั้งสาม
+        เทียบวิธีคิดทีละบรรทัดกับที่คำนวณด้วยมือ
+      </p>
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/site.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,96 @@
+======================================================================
+หลักฐาน: การซ้อม rollback 1 รอบ (8 ขั้น ตาม docs/RUNBOOK.md หัวข้อ 6)
+วันที่รัน: 2026-09-16 15:00:21 +0700
+โฟลเดอร์ทำงาน: /Users/ar677005/Documents/AI_workspaces/learns/loadtest-k6
+Node: v22.22.3
+
+จุดประสงค์: พิสูจน์ว่ากระบวนการ rollback ใช้ได้จริงในวันที่ต้องใช้
+การซ้อมใช้สำเนาชั่วคราวใน /tmp จึงไม่แตะไฟล์จริง และไม่แตะ site/assets/data/
+ในขั้นที่ 7 จะแทนที่ site/ ทั้งโฟลเดอร์จากสำเนา แล้วตรวจว่า hash ตรงกันทุกไฟล์
+======================================================================
+
+### ขั้นที่ 1 — เก็บสำเนาและค่า hash
+$ STAMP=$(date +%Y%m%d-%H%M%S); cp -a site /tmp/ltk6-drill/site-$STAMP
+  STAMP = 20260916-150021
+  จำนวนไฟล์ในสำเนา = 28  (ต้องได้ 28)
+
+### ขั้นที่ 2 — ตรวจว่าสำเนาครบถ้วน
+$ ( cd /tmp/ltk6-drill/site-$STAMP && find . -type f | sort | xargs shasum ) | diff - ...sha256
+  สำเนาครบถ้วน (diff exit=0)
+
+### ขั้นที่ 3 — จงใจสร้างความเสียหาย (จำลอง favicon หายและพาธผิด)
+$ sed -i '' 's|href="favicon.svg"|href="favicon-broken.svg"|' site/index.html site/quiz.html
+$ rm -f site/favicon.svg && ln -sf /nonexistent site/favicon.svg
+  ตรวจสภาพหลังสร้างความเสียหาย:
+    site/index.html  -> href="favicon-broken.svg"
+    site/quiz.html   -> href="favicon-broken.svg"
+    site/favicon.svg -> favicon.svg -> /nonexistent
+
+### ขั้นที่ 4 — ยืนยันว่าตัวตรวจจับได้ (ขั้นสำคัญที่สุด)
+$ node scripts/verify-site.mjs
+   ok   คลังแบบทดสอบมี 6 ชุด ตรงกับจำนวนบทเรียน
+   ok   แบบทดสอบมีทั้งหมด 36 ข้อ (ชุดละ 6 ข้อ)
+   ok   สำเนาสคริปต์ใน site/examples/ ตรงกับต้นฉบับใน k6/ ทั้งห้าไฟล์
+
+====================================================================================
+ผลรวม: ตรวจ 32 รายการ · ผ่าน 29 · ไม่ผ่าน 3
+
+รายการที่ไม่ผ่าน:
+  1) ไฟล์ที่ขาดหาย
+     → site/favicon.svg
+  2) พบหน้าที่ไม่ได้ประกาศ favicon หรือใช้พาธผิด
+     → site/index.html ต้องมี <link rel="icon" type="image/svg+xml" href="favicon.svg"> | site/quiz.html ต้องมี <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  3) ไม่พบไฟล์ site/favicon.svg
+
+  verify-site exit status: 1   (ต้องได้ 1)
+
+$ node scripts/browser-check.mjs   (สรุปเฉพาะบรรทัดท้าย)
+  - 1440px  /quiz.html → favicon favicon-broken.svg ตอบ 404 | console error: Failed to load resource: the server responded with a status of 404 (Not Found) | คำขอล้มเหลว: http://127.0.0.1:53142/favicon-broken.svg — HTTP 404
+  - 1440px  /tools/calculator.html → favicon ../favicon.svg ตอบ 404 | console error: Failed to load resource: the server responded with a status of 404 (Not Found) | คำขอล้มเหลว: http://127.0.0.1:53142/favicon.svg — HTTP 404
+  - 1440px  /tools/latency.html → favicon ../favicon.svg ตอบ 404 | console error: Failed to load resource: the server responded with a status of 404 (Not Found) | คำขอล้มเหลว: http://127.0.0.1:53142/favicon.svg — HTTP 404
+  - 1440px  /troubleshooting.html → favicon favicon.svg ตอบ 404 | console error: Failed to load resource: the server responded with a status of 404 (Not Found) | คำขอล้มเหลว: http://127.0.0.1:53142/favicon.svg — HTTP 404
+  - favicon โหลดไม่ได้ 42 ครั้ง
+
+  browser-check exit status: 1   (ต้องได้ 1)
+
+  ผล: ตัวตรวจทั้งสองตัวจับความเสียหายได้จริง — ขั้นนี้ผ่าน
+
+### ขั้นที่ 5 — ย้อนกลับจากสำเนา
+$ rm -rf site && cp -a /tmp/ltk6-drill/site-$STAMP site
+  คืนค่าแล้ว
+
+### ขั้นที่ 6 — ยืนยันว่าไฟล์กลับมาตรงกับสำเนาทุกไบต์
+$ ( cd site && find . -type f | sort | xargs shasum ) | diff - ...sha256
+  ไฟล์ตรงกับสำเนาทุกไฟล์ (diff exit=0)
+  ตรวจ favicon กลับมาแล้ว: href="favicon.svg" และไฟล์ มีอยู่จริง
+
+### ขั้นที่ 7 — ยืนยันว่าตัวตรวจกลับมาเขียวทั้งสามตัว
+$ node scripts/test-calc.mjs     ; echo exit=$?
+  test-calc     exit=0   (ต้องได้ 0)
+$ node scripts/verify-site.mjs   ; echo exit=$?
+  verify-site   exit=0   (ต้องได้ 0)
+$ node scripts/browser-check.mjs ; echo exit=$?
+  browser-check exit=0   (ต้องได้ 0)
+
+  ผลรวมการตรวจหลังย้อนกลับ:
+เคสทั้งหมด 95 · ผ่าน 95 · ไม่ผ่าน 0
+   ok   ไฟล์ข้อมูล latency สอดคล้องกัน: sample 1155 ค่า, ผลรวม bins 1155 ค่า, ค่า n ที่ประกาศ 1155
+ผลรวม: ตรวจ 32 รายการ · ผ่าน 32 · ไม่ผ่าน 0
+ผลลัพธ์: ผ่านทั้งหมด — ทุกหน้า 200 ไม่มี console/page error ไม่มี 404
+
+### ขั้นที่ 8 — ล้างของที่ใช้ซ้อม
+$ rm -rf /tmp/ltk6-drill
+  ล้างแล้ว
+
+======================================================================
+เกณฑ์ว่าการซ้อมผ่าน
+======================================================================
+  PASS     1. สำเนามี 28 ไฟล์ และ hash ตรง
+  PASS     2. หลังสร้างความเสียหาย ตัวตรวจทั้งสองต้องไม่ผ่าน
+  PASS     3. หลังย้อนกลับ hash ตรงกับสำเนาทุกไฟล์
+  PASS     4. หลังย้อนกลับตัวตรวจทั้งสาม exit 0 ทุกตัว
+
+  สรุป: การซ้อมผ่านทั้ง 4 ข้อ — กระบวนการ rollback ใช้ได้จริง
+
+  รายละเอียดขั้นตอนทั้งหมดอยู่ใน docs/RUNBOOK.md หัวข้อ 6
+  และขั้นตอนจริงที่ใช้กับของจริงอยู่ใน docs/DEPLOY.md หัวข้อ 5

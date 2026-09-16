@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สำรวจข้อมูล latency จริง — ฮิสโตแกรม CDF และเครื่องคำนวณเปอร์เซ็นไทล์ | Load Testing ด้วย k6</title>
+<meta name="description" content="สำรวจข้อมูลเวลาตอบสนองจริง 1,155 ค่าจากการรัน k6 ด้วยกราฟฮิสโตแกรมและเส้น CDF พร้อมเครื่องคำนวณเปอร์เซ็นไทล์ที่แสดงวิธีคิดทีละขั้นและตารางข้อมูลให้ตรวจสอบย้อนกลับ">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="latency" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    หน้านี้ต้องใช้ JavaScript ในการอ่านไฟล์ข้อมูลและวาดกราฟ
+    กรุณาเปิด JavaScript แล้วโหลดหน้าใหม่ เนื้อหาทฤษฎีอ่านได้ที่บทที่ 4
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><circle cx="8.8" cy="8.8" r="5"/><path d="M12.6 12.6l3.6 3.6"/></svg>
+      เครื่องมือ
+    </p>
+
+    <h1>สำรวจข้อมูล latency จริง 1,155 ค่า</h1>
+
+    <p class="lede">
+      หน้านี้อ่านข้อมูลดิบจากการรัน k6 จริงแล้ววาดกราฟให้ดู พร้อมเครื่องคำนวณเปอร์เซ็นไทล์
+      ที่แสดงตำแหน่งและวิธีเทียบสัดส่วนทีละขั้น ใช้คู่กับบทที่ 4 เพื่อยืนยันว่าเข้าใจตรงกัน
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+        ทฤษฎี: <a href="../lessons/04-percentiles.html">บทที่ 4</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        แหล่งข้อมูล: <code>assets/data/latency-samples.json</code>
+      </div>
+    </div>
+
+    <div id="load-state" class="panel--empty" role="status" aria-live="polite">
+      กำลังอ่านไฟล์ข้อมูล
+    </div>
+
+    <div id="data-host" hidden>
+
+      <h2 id="overview">ภาพรวมของชุดข้อมูล</h2>
+
+      <p id="source-note" class="source-note"></p>
+
+      <div class="stat-grid bleed" id="stat-grid"></div>
+
+      <h2 id="histogram">การกระจายของเวลาตอบสนอง</h2>
+
+      <figure class="chart-figure bleed">
+        <figcaption>
+          <p class="chart-title">ฮิสโตแกรมของ http_req_duration</p>
+          <p class="chart-caption">
+            แกนนอนคือเวลาตอบสนอง หน่วยมิลลิวินาที ช่วงละ 2 ms แกนตั้งคือจำนวนคำขอ
+            แท่งสีส้มทางขวารวมทุกคำขอที่ใช้เวลาตั้งแต่ 100 ms ขึ้นไปไว้ด้วยกัน
+            เส้นประคือค่าเฉลี่ย เส้นที่สองคือ p95
+          </p>
+        </figcaption>
+        <div class="chart-host" id="hist-host" tabindex="0" aria-describedby="hist-desc"></div>
+        <p id="hist-desc" class="chart-foot">
+          วางเมาส์บนแท่งเพื่อดูจำนวนคำขอในช่วงนั้น ตัวเลขทุกตัวนับจากข้อมูลจริง
+          ตารางข้อมูลเต็มอยู่ในส่วนถัดไป
+        </p>
+        <div id="hist-table-host"></div>
+      </figure>
+
+      <h2 id="cdf">เส้นสัดส่วนสะสม</h2>
+
+      <figure class="chart-figure bleed">
+        <figcaption>
+          <p class="chart-title">เส้น CDF ของเวลาตอบสนอง</p>
+          <p class="chart-caption">
+            จุดบนเส้นบอกว่ามีคำขอสัดส่วนเท่าไรที่ใช้เวลาไม่เกินค่าบนแกนนอน ณ จุดนั้น
+            เส้นประสีส้มคือค่าเฉลี่ย ส่วนเส้นที่เหลือคือ p50, p90, p95 และ p99
+          </p>
+        </figcaption>
+        <div class="chart-host" id="cdf-host" tabindex="0" aria-describedby="cdf-desc"></div>
+        <p id="cdf-desc" class="chart-foot">
+          วางเมาส์บนกราฟ หรือกด Tab เพื่อโฟกัสแล้วใช้ปุ่มลูกศรซ้ายขวาและปุ่ม Home หรือ End
+          เพื่อเลื่อนดูค่า ตัวเลขทุกจุดคำนวณจากข้อมูลจริงทั้งชุด ไม่ได้เป็นการประมาณ
+        </p>
+        <div id="cdf-table-host"></div>
+      </figure>
+
+      <h2 id="percentile-tool">เครื่องคำนวณเปอร์เซ็นไทล์</h2>
+
+      <p>
+        ใส่ว่าต้องการเปอร์เซ็นไทล์ใด เครื่องจะหาตำแหน่งในข้อมูลที่เรียงแล้ว
+        เทียบสัดส่วนระหว่างสองค่าที่อยู่ติดกัน แล้วรายงานผลพร้อมวิธีคิด
+      </p>
+
+      <form id="form-pct" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="pct-p">เปอร์เซ็นไทล์ที่ต้องการ (p) <span class="hint">มากกว่า 0 และไม่เกิน 100</span></label>
+            <input type="number" id="pct-p" name="pTarget" min="0.1" max="100" step="0.1"
+                   inputmode="decimal" value="95" aria-describedby="err-pct-p">
+            <p class="field-error" id="err-pct-p" hidden></p>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn--primary" type="submit">คำนวณ</button>
+          <span id="copy-pct"></span>
+        </div>
+        <div class="btn-row" role="group" aria-label="ค่าเปอร์เซ็นไทล์ที่ใช้บ่อย">
+          <button class="btn btn--small" type="button" data-preset="50">p50</button>
+          <button class="btn btn--small" type="button" data-preset="75">p75</button>
+          <button class="btn btn--small" type="button" data-preset="90">p90</button>
+          <button class="btn btn--small" type="button" data-preset="95">p95</button>
+          <button class="btn btn--small" type="button" data-preset="99">p99</button>
+          <button class="btn btn--small" type="button" data-preset="99.9">p99.9</button>
+          <button class="btn btn--small" type="button" data-preset="100">สูงสุด (p100)</button>
+        </div>
+      </form>
+
+      <div class="panel" id="pct-result" role="status" aria-live="polite">
+        <div class="panel__head">
+          <h3>ผลลัพธ์</h3>
+        </div>
+        <div class="panel__body">
+          <p class="panel--empty" id="pct-empty">ยังไม่มีผลลัพธ์</p>
+          <div id="pct-output" hidden></div>
+        </div>
+      </div>
+
+      <h2 id="bins-table">ตารางข้อมูลจริง</h2>
+
+      <p>
+        ตารางนี้แสดงเฉพาะช่วงที่มีคำขออยู่จริง เพื่อให้อ่านได้โดยไม่ต้องเลื่อนผ่านช่วงว่าง
+        ตัวเลขคอลัมน์สุดท้ายคือสัดส่วนสะสมซึ่งใช้ตรวจสอบเส้น CDF ได้
+      </p>
+
+      <div id="bins-table-host"></div>
+
+      <h2 id="how-to-verify">ตรวจสอบตัวเลขด้วยตัวเอง</h2>
+
+      <p>ถ้าต้องการยืนยันว่ากราฟและตัวเลขในหน้านี้ถูกต้อง ทำได้สามวิธี</p>
+
+      <ol class="steps">
+        <li>
+          <strong>ตรวจจากตารางด้านบน</strong> เอาจำนวนในคอลัมน์ "จำนวน request" รวมกัน
+          จะได้ 1,155 ตรงกับค่า n ที่รายงาน
+        </li>
+        <li>
+          <strong>ตรวจจากไฟล์ JSON โดยตรง</strong> เปิด
+          <code>assets/data/latency-samples.json</code> ฟิลด์ <code>sample</code>
+          เก็บค่าทั้ง 1,155 ตัวเรียงจากน้อยไปมากอยู่แล้ว ลองเอาเลขลำดับที่ 1,096 กับ 1,097
+          มาเทียบสัดส่วนตามวิธีในบทที่ 4 จะได้ค่า p95
+        </li>
+        <li>
+          <strong>เทียบกับค่าที่ k6 รายงาน</strong> ค่า avg, p50, p90 และ p95 ตรงกับค่าในตาราง
+          summary ที่ k6 พิมพ์ออกจอ ส่วน p99 ไม่ปรากฏบนจอ ต้องคำนวณจากข้อมูลดิบแบบที่หน้านี้ทำ
+        </li>
+      </ol>
+
+      <div id="verify-note"></div>
+
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/calc.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  var WARN = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>';
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6.__ctx;
+    var calc = window.LTK6.calc;
+    var charts = window.LTK6.charts;
+    var fmt = window.LTK6.format;
+    var copyButton = window.LTK6.copyButton;
+    if (!ctx || !calc || !charts) return;
+
+    var src = ctx.root + 'assets/data/latency-samples.json';
+    var stateEl = document.getElementById('load-state');
+
+    function fail(err) {
+      stateEl.className = 'callout callout--warn';
+      stateEl.innerHTML =
+        '<div class="callout__head">' + WARN +
+        '<span class="label">อ่านไฟล์ข้อมูลไม่สำเร็จ</span></div>' +
+        '<p>โหลด <code>' + esc(src) + '</code> ไม่ได้ (' + esc(err.message) + ')</p>' +
+        '<p>สาเหตุที่พบบ่อยที่สุดคือเปิดหน้านี้ด้วยที่อยู่แบบ <code>file://</code> ' +
+        'ซึ่งเบราว์เซอร์ไม่อนุญาตให้อ่านไฟล์ข้อมูลด้วยเหตุผลด้านความปลอดภัย</p>' +
+        '<p><strong>วิธีแก้:</strong> เปิดเว็บเซิร์ฟเวอร์ในโฟลเดอร์ <code>site</code> แล้วเข้าผ่านที่อยู่ http</p>' +
+        '<pre style="margin:.5em 0">cd loadtest-k6/site\npython3 -m http.server 8000\n# แล้วเปิด http://localhost:8000/tools/latency.html</pre>' +
+        '<p>หรือใช้ <code>npx serve</code> ถนัดกว่า ส่วนข้อมูลต้นทางยังเปิดดูได้โดยตรงที่ ' +
+        '<code>assets/data/latency-samples.json</code></p>';
+      stateEl.hidden = false;
+      document.getElementById('data-host').hidden = true;
+    }
+
+    ctx.loadJSON(src).then(function (data) {
+      var sorted = data.sample;
+      var n = sorted.length;
+      var desc = calc.describe(sorted);
+      var pct = data.percentiles;
+
+      stateEl.hidden = true;
+      document.getElementById('data-host').hidden = false;
+
+      /* ---------- ที่มา ---------- */
+      document.getElementById('source-note').innerHTML =
+        '<strong>ที่มา:</strong> ' + esc(data.source) + ' — บันทึกเมื่อ ' +
+        esc(data.capturedAt) + ' จำนวน <span class="num">' + fmt.int(n) +
+        '</span> ค่า ไฟล์นี้เก็บค่าทุกตัวเรียงจากน้อยไปมากไว้ในฟิลด์ <code>sample</code> ' +
+        'และเก็บฮิสโตแกรมที่คำนวณไว้แล้วในฟิลด์ <code>bins</code>';
+
+      /* ---------- การ์ดสถิติ ---------- */
+      var stats = [
+        { label: 'จำนวนคำขอ (n)', value: fmt.int(n), unit: '', note: 'จำนวนค่าทั้งหมดในชุดข้อมูล' },
+        { label: 'ค่าเฉลี่ย', value: fmt.number(desc.mean, 2), unit: 'ms', note: 'mean ของทั้งชุด' },
+        { label: 'ค่ามัธยฐาน p50', value: fmt.number(desc.p50, 2), unit: 'ms', note: 'ครึ่งหนึ่งเร็วกว่านี้' },
+        { label: 'p95', value: fmt.number(desc.p95, 2), unit: 'ms', note: '5% ช้ากว่านี้' },
+        { label: 'p99', value: fmt.number(desc.p99, 2), unit: 'ms', note: 'สูงกว่าค่าเฉลี่ย ' + fmt.number(desc.p99 / desc.mean, 2) + ' เท่า' },
+        { label: 'ค่าสูงสุด', value: fmt.number(desc.max, 2), unit: 'ms', note: 'คำขอที่ช้าที่สุดหนึ่งตัว' }
+      ];
+      document.getElementById('stat-grid').innerHTML = stats.map(function (s) {
+        return '<div class="stat"><p class="stat__label">' + esc(s.label) + '</p>' +
+          '<p class="stat__value">' + esc(s.value) +
+          (s.unit ? '<span class="stat__unit">' + esc(s.unit) + '</span>' : '') + '</p>' +
+          '<p class="stat__note">' + esc(s.note) + '</p></div>';
+      }).join('');
+
+      /* ---------- ฮิสโตแกรม ---------- */
+      charts.histogram(document.getElementById('hist-host'), {
+        bins: data.bins,
+        unit: 'ms',
+        total: n,
+        ariaLabel: 'ฮิสโตแกรมการกระจายของเวลาตอบสนอง ' + n + ' คำขอ ช่วงละ 2 มิลลิวินาที',
+        marks: [
+          { value: desc.mean, label: 'mean ' + fmt.number(desc.mean, 2), kind: 'mean' },
+          { value: desc.p95, label: 'p95 ' + fmt.number(desc.p95, 2), color: 'var(--accent)' }
+        ]
+      });
+      document.getElementById('hist-table-host')
+        .appendChild(charts.histogramTable(data.bins, 'ms', n));
+
+      /* ---------- CDF ---------- */
+      function cdfAt(x) {
+        var lo = 0, hi = sorted.length;
+        while (lo < hi) {
+          var mid = (lo + hi) >> 1;
+          if (sorted[mid] <= x) lo = mid + 1; else hi = mid;
+        }
+        return lo / sorted.length * 100;
+      }
+      var points = calc.cdfPoints(sorted, 1200);
+      var meanPct = cdfAt(desc.mean);
+      charts.cdf(document.getElementById('cdf-host'), {
+        points: points,
+        xMax: 600,
+        unit: 'ms',
+        ariaLabel: 'เส้นสัดส่วนสะสมของเวลาตอบสนอง พร้อมจุด p50 p90 p95 p99 และค่าเฉลี่ย',
+        marks: [
+          { value: desc.p50, pct: 50, label: 'p50 ' + fmt.number(desc.p50, 2), row: 0 },
+          { value: desc.mean, pct: meanPct, label: 'mean ' + fmt.number(desc.mean, 2), kind: 'mean', row: 1 },
+          { value: desc.p90, pct: 90, label: 'p90 ' + fmt.number(desc.p90, 2), row: 2 },
+          { value: desc.p95, pct: 95, label: 'p95 ' + fmt.number(desc.p95, 2), row: 3 },
+          { value: desc.p99, pct: 99, label: 'p99 ' + fmt.number(desc.p99, 2), row: 0 }
+        ]
+      });
+
+      var cdfTable = document.createElement('table');
+      cdfTable.className = 'data';
+      cdfTable.innerHTML =
+        '<caption>ตารางข้อมูลจริงของเส้น CDF — ค่าเปอร์เซ็นไทล์ เวลาตอบสนอง และจำนวนคำขอที่เร็วกว่านั้น</caption>' +
+        '<thead><tr><th>เปอร์เซ็นไทล์</th><th class="num">เวลาตอบสนอง (ms)</th>' +
+        '<th class="num">สัดส่วนสะสมจริง</th><th class="num">จำนวนคำขอ</th></tr></thead><tbody>' +
+        [1, 5, 10, 25, 50, 75, 90, 95, 97, 99, 99.9, 100].map(function (p) {
+          var step = calc.percentileStep(sorted, p);
+          var actual = cdfAt(step.value);
+          var cls = (p === 95 || p === 99) ? ' class="row-signal"' : '';
+          return '<tr' + cls + '><td>p' + p + '</td>' +
+            '<td class="num">' + fmt.number(step.value, 2) + '</td>' +
+            '<td class="num">' + fmt.number(actual, 2) + '%</td>' +
+            '<td class="num">' + fmt.int(Math.round(actual / 100 * n)) + '</td></tr>';
+        }).join('') +
+        '</tbody>';
+      var cdfWrap = document.createElement('div');
+      cdfWrap.className = 'table-wrap';
+      cdfWrap.appendChild(cdfTable);
+      document.getElementById('cdf-table-host').appendChild(cdfWrap);
+
+      /* ---------- ตาราง bins ---------- */
+      document.getElementById('bins-table-host')
+        .appendChild(charts.histogramTable(data.bins, 'ms', n));
+
+      /* ---------- เครื่องคำนวณเปอร์เซ็นไทล์ ---------- */
+      var pctForm = document.getElementById('form-pct');
+      var pctInput = document.getElementById('pct-p');
+      var pctErr = document.getElementById('err-pct-p');
+
+      function showPctError(msg, fix) {
+        if (!msg) {
+          pctInput.removeAttribute('aria-invalid');
+          pctErr.hidden = true;
+          pctErr.innerHTML = '';
+          return;
+        }
+        pctInput.setAttribute('aria-invalid', 'true');
+        pctErr.hidden = false;
+        pctErr.innerHTML = WARN + '<span>' + esc(msg) +
+          '<span class="fix">วิธีแก้: ' + esc(fix) + '</span></span>';
+      }
+
+      function runPct() {
+        var raw = pctInput.value;
+        var p = calc.toNumber(raw);
+        if (raw.trim() === '' || Number.isNaN(p)) {
+          showPctError('ยังไม่ได้กรอกเปอร์เซ็นไทล์', 'กรอกตัวเลขเช่น 95 หรือ 99.9');
+          document.getElementById('pct-output').hidden = true;
+          document.getElementById('pct-empty').hidden = false;
+          document.getElementById('pct-empty').textContent = 'ยังคำนวณไม่ได้ กรอกค่า p ก่อน';
+          return;
+        }
+        if (p <= 0) {
+          showPctError('เปอร์เซ็นไทล์ต้องมากกว่า 0 (ได้รับ ' + p + ')',
+            'ค่าที่ใช้บ่อยคือ 50, 90, 95, 99 หรือ 99.9');
+          document.getElementById('pct-output').hidden = true;
+          document.getElementById('pct-empty').hidden = false;
+          document.getElementById('pct-empty').textContent = 'ยังคำนวณไม่ได้ กรอกค่า p ใหม่';
+          return;
+        }
+        if (p > 100) {
+          showPctError('เปอร์เซ็นไทล์ต้องไม่เกิน 100 (ได้รับ ' + p + ')',
+            'ถ้าต้องการค่าสูงสุดให้กรอก 100');
+          document.getElementById('pct-output').hidden = true;
+          document.getElementById('pct-empty').hidden = false;
+          document.getElementById('pct-empty').textContent = 'ยังคำนวณไม่ได้ กรอกค่า p ใหม่';
+          return;
+        }
+        showPctError(null);
+
+        var step = calc.percentileStep(sorted, p);
+        var cumulative = cdfAt(step.value);
+        var countAtOrBelow = Math.round(cumulative / 100 * n);
+        var rounded = p === 100 ? 'ค่าสูงสุดของชุดข้อมูล' : 'p' + p;
+
+        var html = '<dl class="result-list">' +
+          '<div class="result-line result-line--key"><dt>ค่าของ ' + esc(rounded) + '</dt>' +
+          '<dd>' + fmt.ms(step.value) + '</dd></div>' +
+          '<div class="result-line"><dt>ตำแหน่งที่คำนวณได้</dt><dd>' + fmt.number(step.index, 3) + '</dd></div>' +
+          '<div class="result-line"><dt>จำนวนข้อมูลทั้งหมด (n)</dt><dd>' + fmt.int(n) + '</dd></div>' +
+          '<div class="result-line"><dt>คำขอที่เร็วกว่าหรือเท่ากับค่านี้</dt>' +
+          '<dd>' + fmt.int(countAtOrBelow) + ' (' + fmt.number(cumulative, 2) + '%)</dd></div>' +
+          '<div class="result-line"><dt>คำขอที่ช้ากว่าค่านี้</dt>' +
+          '<dd>' + fmt.int(n - countAtOrBelow) + ' (' + fmt.number(100 - cumulative, 2) + '%)</dd></div>' +
+          '<div class="result-line"><dt>เทียบกับค่าเฉลี่ย ' + fmt.number(desc.mean, 2) + ' ms</dt>' +
+          '<dd>× ' + fmt.number(step.value / desc.mean, 2) + '</dd></div>' +
+          '</dl>';
+
+        html += '<h4>วิธีคิดทีละขั้น</h4><ol class="steps">' +
+          '<li><strong>เรียงข้อมูลจากน้อยไปมาก</strong>' +
+          '<p class="muted" style="font-size:.85rem">ข้อมูลในไฟล์ถูกจัดเรียงไว้แล้ว ' +
+          'ค่าต่ำสุดคือ ' + fmt.number(desc.min, 2) + ' ms และค่าสูงสุดคือ ' +
+          fmt.number(desc.max, 2) + ' ms</p></li>' +
+          '<li><strong>หาตำแหน่งด้วยสูตร ตำแหน่ง = p × (n − 1)</strong>' +
+          '<div class="working">' +
+          '<span class="w-line">ตำแหน่ง = ' + fmt.number(step.p / 100, 4) + ' × (' + fmt.int(n) + ' − 1)</span>' +
+          '<span class="w-line">        = ' + fmt.number(step.p / 100, 4) + ' × ' + fmt.int(n - 1) + '</span>' +
+          '<span class="w-line w-result">        = ' + fmt.number(step.index, 4) + '</span>' +
+          '</div></li>' +
+          '<li><strong>หาสองค่าที่อยู่ติดกัน</strong>' +
+          '<div class="working">' +
+          '<span class="w-line">ตำแหน่งปัดลง = ' + fmt.int(step.lower) + ' → ค่าลำดับที่ ' +
+          fmt.int(step.lower + 1) + ' = ' + fmt.number(step.lowerValue, 3) + ' ms</span>' +
+          '<span class="w-line">ตำแหน่งปัดขึ้น = ' + fmt.int(step.upper) + ' → ค่าลำดับที่ ' +
+          fmt.int(step.upper + 1) + ' = ' + fmt.number(step.upperValue, 3) + ' ms</span>' +
+          '<span class="w-line">เศษที่เหลือ     = ' + fmt.number(step.fraction, 4) + '</span>' +
+          '</div></li>' +
+          '<li><strong>เทียบสัดส่วนระหว่างสองค่า</strong>' +
+          '<div class="working">' +
+          '<span class="w-line">ค่า = ' + fmt.number(step.lowerValue, 3) + ' + (' +
+          fmt.number(step.upperValue, 3) + ' − ' + fmt.number(step.lowerValue, 3) + ') × ' +
+          fmt.number(step.fraction, 4) + '</span>' +
+          '<span class="w-line">    = ' + fmt.number(step.lowerValue, 3) + ' + ' +
+          fmt.number(step.upperValue - step.lowerValue, 3) + ' × ' + fmt.number(step.fraction, 4) + '</span>' +
+          '<span class="w-line w-result">    = ' + fmt.number(step.value, 4) + ' ms</span>' +
+          '</div></li>' +
+          '<li><strong>ตีความ</strong>' +
+          '<p class="muted" style="font-size:.85rem">มีคำขอ ' + fmt.int(countAtOrBelow) +
+          ' ตัวจากทั้งหมด ' + fmt.int(n) + ' ตัว (' + fmt.number(cumulative, 2) +
+          '%) ที่ใช้เวลาไม่เกิน ' + fmt.number(step.value, 2) + ' ms ' +
+          'และอีก ' + fmt.int(n - countAtOrBelow) + ' ตัวที่ช้ากว่านั้น</p></li>' +
+          '</ol>';
+
+        var out = document.getElementById('pct-output');
+        out.innerHTML = html;
+        out.hidden = false;
+        document.getElementById('pct-empty').hidden = true;
+
+        var slot = document.getElementById('copy-pct');
+        slot.innerHTML = '';
+        if (copyButton) {
+          slot.appendChild(copyButton(function () {
+            return [
+              'คำนวณเปอร์เซ็นไทล์ p' + step.p + ' จากข้อมูลจริง n = ' + n,
+              '',
+              'ตำแหน่ง = p × (n − 1) = ' + (step.p / 100) + ' × ' + (n - 1) + ' = ' + fmt.number(step.index, 4),
+              'ค่าลำดับที่ ' + (step.lower + 1) + ' = ' + fmt.number(step.lowerValue, 3) + ' ms',
+              'ค่าลำดับที่ ' + (step.upper + 1) + ' = ' + fmt.number(step.upperValue, 3) + ' ms',
+              'เศษ = ' + fmt.number(step.fraction, 4),
+              '',
+              'ค่า = ' + fmt.number(step.lowerValue, 3) + ' + (' + fmt.number(step.upperValue, 3) + ' − ' +
+                fmt.number(step.lowerValue, 3) + ') × ' + fmt.number(step.fraction, 4) +
+                ' = ' + fmt.number(step.value, 4) + ' ms',
+              '',
+              'ตีความ: ' + fmt.int(countAtOrBelow) + ' จาก ' + fmt.int(n) + ' คำขอ (' +
+                fmt.number(cumulative, 2) + '%) ใช้เวลาไม่เกิน ' + fmt.number(step.value, 2) + ' ms',
+              'เทียบกับค่าเฉลี่ย ' + fmt.number(desc.mean, 2) + ' ms → ×' + fmt.number(step.value / desc.mean, 2),
+              '',
+              'ที่มา: ' + data.source
+            ].join('\n');
+          }, 'คัดลอกผลลัพธ์'));
+        }
+      }
+
+      pctForm.addEventListener('submit', function (evt) { evt.preventDefault(); runPct(); });
+      pctInput.addEventListener('input', runPct);
+      Array.prototype.forEach.call(pctForm.querySelectorAll('[data-preset]'), function (btn) {
+        btn.addEventListener('click', function () {
+          pctInput.value = btn.getAttribute('data-preset');
+          runPct();
+        });
+      });
+
+      /* ---------- หมายเหตุการตรวจสอบ ---------- */
+      var sumBins = data.bins.reduce(function (a, b) { return a + b.count; }, 0);
+      document.getElementById('verify-note').innerHTML =
+        '<div class="callout callout--evidence">' +
+        '<div class="callout__head">' + window.LTK6.icon('check') +
+        '<span class="label">ผลการตรวจสอบความสอดคล้องของข้อมูลชุดนี้</span></div>' +
+        '<ul>' +
+        '<li>ผลรวมจำนวนคำขอในทุกช่วงของฮิสโตแกรม = <span class="num">' + fmt.int(sumBins) +
+        '</span> เท่ากับค่า n ที่ประกาศไว้ (<span class="num">' + fmt.int(data.n) + '</span>)</li>' +
+        '<li>ค่าเฉลี่ยที่คำนวณจากข้อมูลดิบ = <span class="num">' + fmt.number(desc.mean, 2) +
+        '</span> ms ตรงกับค่า avg ที่ k6 รายงานในตาราง summary</li>' +
+        '<li>p50, p90 และ p95 ที่คำนวณได้ตรงกับค่าในตาราง summary ของ k6</li>' +
+        '<li>ข้อมูลในไฟล์ถูกเรียงจากน้อยไปมากแล้ว ทำให้ตรวจสอบด้วยมือได้สะดวก</li>' +
+        '</ul></div>';
+
+      runPct();
+      document.dispatchEvent(new CustomEvent('ltk6:latency-ready'));
+
+    }).catch(fail);
+  });
+})();
+</script>
+
+</body>
+</html>

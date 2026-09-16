@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Testing ด้วย k6 — บทเรียนภาษาไทยสำหรับผู้เริ่มต้น</title>
+<meta name="description" content="บทเรียนโหลดเทสต์ด้วย k6 ภาษาไทย ตั้งแต่การคำนวณ TPS, ทำความเข้าใจ virtual user, อ่าน metric, ใช้ p95/p99 ไปจนถึงเลือกรูปแบบการทดสอบ ตัวเลขทุกตัวมาจากการรันจริง">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="home" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูนำทางและสารบัญในหน้านี้สร้างด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งานเมนู
+    เนื้อหาบทเรียนยังอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+      ภาพรวมและเส้นทางการอ่าน
+    </p>
+
+    <h1>โหลดเทสต์ด้วย k6 — วัดให้เห็นตัวเลข ไม่เดา</h1>
+
+    <p class="lede">
+      บทเรียนชุดนี้พาจากคำถามง่าย ๆ ว่า "เว็บเรารับคนได้กี่คน" ไปจนถึงการอ่านตัวเลข
+      ที่ k6 รายงานอย่างถูกต้อง ทุกค่าที่ยกมาในบทเรียนมาจากการรัน k6 จริงหนึ่งครั้ง
+      ที่บันทึกไว้ในเว็บนี้ ไม่ใช่ตัวเลขสมมติ และทุกสูตรมีตัวอย่างแทนค่าทีละขั้นให้ตรวจตามได้
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+        6 บทเรียน + 2 เครื่องมือ
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        อ่านจบได้ในประมาณ 90 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ข้อมูลอ้างอิง: k6 v2.2.0
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11.6V3.4"/><path d="M6.8 6.6L10 3.4l3.2 3.2"/><path d="M3.8 15.2v.6a1.2 1.2 0 0 0 1.2 1.2h10a1.2 1.2 0 0 0 1.2-1.2v-.6"/></svg>
+        ปรับปรุง 2026-09-16
+      </div>
+    </div>
+
+    <h2 id="what-is-load-testing">โหลดเทสต์คืออะไร และตอบคำถามอะไรให้เรา</h2>
+
+    <p>
+      โหลดเทสต์คือการสร้างภาระงานเทียมขึ้นมาชุดหนึ่ง แล้ววัดว่าระบบตอบสนองอย่างไร
+      ภาระงานนั้นถูกกำหนดล่วงหน้าอย่างชัดเจนว่าใช้ผู้ใช้กี่คน นานเท่าไร
+      และแต่ละคนทำอะไรบ้าง การทดสอบที่มีประโยชน์ต้องตอบคำถามได้ว่า
+      "ที่ภาวะนี้ ระบบช้าลงเท่าไร" ไม่ใช่แค่ "ระบบรันผ่าน"
+    </p>
+
+    <p>คำถามที่โหลดเทสต์ตอบได้ มีอยู่สี่กลุ่มหลัก</p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>คำถามที่โหลดเทสต์ตอบได้ และตัวเลขที่ต้องดูเพื่อตอบคำถามนั้น</caption>
+        <thead>
+          <tr>
+            <th>คำถาม</th>
+            <th class="wrap">ตัวเลขที่ต้องดู</th>
+            <th class="wrap">บทที่เกี่ยวข้อง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ตอนนี้ระบบทำได้กี่ request ต่อวินาที</td>
+            <td class="wrap">http_reqs, iterations, iteration_duration</td>
+            <td class="wrap"><a href="lessons/01-tps.html">บทที่ 1</a></td>
+          </tr>
+          <tr>
+            <td>ผู้ใช้ส่วนใหญ่รอนานแค่ไหน และมีกี่คนที่รอนานผิดปกติ</td>
+            <td class="wrap">p95, p99 ของ http_req_duration และรูปร่างการกระจาย</td>
+            <td class="wrap"><a href="lessons/04-percentiles.html">บทที่ 4</a></td>
+          </tr>
+          <tr>
+            <td>คอขวดอยู่ที่เซิร์ฟเวอร์ เครือข่าย หรือเครื่องทดสอบ</td>
+            <td class="wrap">สัดส่วนของ http_req_waiting เทียบกับ blocked และ connecting</td>
+            <td class="wrap"><a href="lessons/03-metrics.html">บทที่ 3</a></td>
+          </tr>
+          <tr>
+            <td>เพิ่มคนอีกเท่าตัวแล้วระบบยังไหวไหม</td>
+            <td class="wrap">จุดที่ throughput หยุดโตแล้ว latency เริ่มพุ่ง</td>
+            <td class="wrap"><a href="lessons/05-load-profiles.html">บทที่ 5</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">จริยธรรมและความปลอดภัย</span>
+      </div>
+      <p>
+        โหลดเทสต์คือการยิงคำขอจำนวนมากด้วยความเร็วสูง ใส่ระบบของคนอื่นจึงไม่ต่างจากการโจมตี
+        และอาจผิดกฎหมายได้ ตัวอย่างทุกตัวในบทเรียนนี้จึงชี้ไปที่ <code>http://localhost:8080</code>
+        ซึ่งเป็น mock server ที่แนบมากับโปรเจกต์นี้ หรือ <code>https://test.k6.io</code>
+        ซึ่งเป็นโดเมนที่ผู้พัฒนา k6 สร้างขึ้นเพื่อการทดสอบโดยเฉพาะ
+        ถ้าจะทดสอบระบบอื่น ต้องได้รับอนุญาตเป็นลายลักษณ์อักษรจากเจ้าของระบบก่อนเสมอ
+        และควรใช้สภาพแวดล้อมทดสอบแทนระบบที่ผู้ใช้จริงใช้งานอยู่
+      </p>
+    </div>
+
+    <h2 id="how-k6-works">k6 ทำงานอย่างไร</h2>
+
+    <p>
+      k6 เป็นโปรแกรมเดียวจบที่เขียนสคริปต์ด้วย JavaScript แล้วรันเป็นไบนารี
+      ไม่ต้องติดตั้ง runtime อื่นเพิ่ม เพราะตัวรัน JavaScript ฝังอยู่ในไบนารีแล้ว
+      เมื่อสั่ง <code>k6 run</code> จะเกิดลำดับดังนี้
+    </p>
+
+    <ol class="steps">
+      <li>
+        <strong>k6 อ่านค่าตั้งต้นจากฟังก์ชัน <code>options</code></strong> ในสคริปต์ แล้วรู้ว่าต้องใช้ผู้ใช้เสมือนกี่ตัว
+        นานเท่าไร และมีเกณฑ์ตัดสินอะไรบ้าง
+      </li>
+      <li>
+        <strong>สร้าง virtual user (VU) ตามจำนวนที่กำหนด</strong> โดยแต่ละ VU มี runtime ของ JavaScript
+        และหน่วยความจำของตัวเอง แยกจากกันโดยสมบูรณ์
+      </li>
+      <li>
+        <strong>แต่ละ VU รันฟังก์ชัน <code>default()</code> ซ้ำเป็นลูป</strong> จนหมดเวลาหรือครบจำนวนรอบที่กำหนด
+        ระหว่างที่รอ response จากเซิร์ฟเวอร์ VU นั้นว่างงาน ทำอย่างอื่นไม่ได้
+      </li>
+      <li>
+        <strong>k6 รวมผลและเทียบกับ threshold</strong> แล้วสรุปออกมาเป็นตารางท้ายการรัน
+        ถ้าเกณฑ์ข้อใดไม่ผ่าน จะจบด้วย exit code 99 ซึ่งทำให้ใช้กั้นในระบบอัตโนมัติได้ทันที
+      </li>
+    </ol>
+
+    <p>
+      ประเด็นสำคัญที่ทำให้เข้าใจตัวเลขทั้งหมดในบทเรียนนี้คือ
+      VU ไม่ใช่เบราว์เซอร์จำลอง มันไม่วาด HTML ไม่จัด CSS และไม่รัน JavaScript ของหน้าเว็บ
+      หน้าที่ของมันมีอย่างเดียวคือยิงคำขอ HTTP แล้วรอคำตอบ ด้วยเหตุนี้ VU หนึ่งตัวจึงกินทรัพยากรน้อยมาก
+      และการทดสอบจึงวัดได้แค่ชั้น HTTP ไม่ได้วัดเวลาที่เบราว์เซอร์ใช้เรนเดอร์หน้า
+    </p>
+
+    <h2 id="evidence">หลักฐานที่ใช้ตลอดบทเรียนนี้</h2>
+
+    <p>
+      ตัวเลขทุกตัวในบทเรียนนี้มาจากการรันครั้งเดียวกัน สคริปต์ยิงคำขอไปที่ mock server ในเครื่อง
+      ด้วยผู้ใช้เสมือน 10 ตัว เป็นเวลา 12 วินาที ข้อมูลดิบถูกเก็บไว้ที่
+      <code>docs/evidence/k6-csv-raw-sample.csv</code> และ
+      <code>assets/data/latency-samples.json</code> ซึ่งเป็นไฟล์ที่เว็บนี้อ่านไปวาดกราฟจริง
+      ถ้าเห็นตัวเลขในบทเรียนที่ใด จะตรวจย้อนกลับได้จากสองไฟล์นี้เสมอ
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ผลการรัน k6 v2.2.0 — 10 VUs, 12 s (ค่าที่ k6 รายงาน)</caption>
+        <thead>
+          <tr>
+            <th>metric</th>
+            <th class="wrap">ค่าที่วัดได้</th>
+            <th class="wrap">ใช้ตอบคำถามอะไร</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">http_reqs</td>
+            <td class="wrap"><span class="num">1,155</span> request · <span class="num">93.44</span>/s</td>
+            <td class="wrap">throughput ของการรันนี้</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_duration</td>
+            <td class="wrap">avg <span class="num">54.25</span> ms · p95 <span class="num">74.53</span> ms · p99 <span class="num">466.29</span> ms</td>
+            <td class="wrap">ผู้ใช้ส่วนใหญ่รอนานแค่ไหน และหางยาวแค่ไหน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">iteration_duration</td>
+            <td class="wrap">avg <span class="num">105.38</span> ms</td>
+            <td class="wrap">เวลาต่อรอบทั้งหมด รวม think time</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_failed</td>
+            <td class="wrap"><span class="num">0.00</span>%</td>
+            <td class="wrap">ไม่มี request ใดล้มเหลวในการรันนี้</td>
+          </tr>
+          <tr>
+            <td class="code-cell">vus / vus_max</td>
+            <td class="wrap"><span class="num">10</span> / <span class="num">10</span></td>
+            <td class="wrap">k6 จองและใช้ VU ได้ครบตามที่ขอ</td>
+          </tr>
+          <tr>
+            <td class="code-cell">ระยะเวลารัน</td>
+            <td class="wrap"><span class="num">12.36</span> วินาที</td>
+            <td class="wrap">ตัวหารที่ใช้คำนวณ throughput</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ผลการรัน k6 v2.2.0 เมื่อ 2026-09-16 ต่อ mock server ในเครื่องเดียวกัน
+      อ่านค่าฉบับเต็มได้จากไฟล์ CSV ที่แนบมา และดูการกระจายของ latency ทั้ง 1,155 ค่าได้ที่
+      <a href="tools/latency.html">เครื่องสำรวจ latency</a>
+    </p>
+
+    <h2 id="reading-path">เส้นทางการอ่าน</h2>
+
+    <p>
+      บทเรียนเรียงตามลำดับการใช้งานจริง คือเริ่มจากตัวเลขที่ต้องคำนวณเอง ไปจนถึงการอ่านผลลัพธ์
+      แต่ละบทต่อยอดจากบทก่อนหน้า ถ้ามีเวลาจำกัด ให้อ่านบทที่ 1 และ 4 ให้จบก่อน
+      เพราะสองบทนี้เปลี่ยนวิธีที่เรามองตัวเลขประสิทธิภาพมากที่สุด
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6.6"/><circle cx="10" cy="10" r="2.6"/></svg>
+          บทที่ 1
+        </p>
+        <h3><a href="lessons/01-tps.html">คำนวณ TPS / RPS</a></h3>
+        <p>สูตร TPS จากจำนวน VU และเวลาต่อรอบ พร้อมตัวอย่างแทนค่าทีละขั้น และข้อผิดพลาดที่ทำให้ตัวเลขสูงเกินจริงสองเท่า</p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.6l6.2 3.2-6.2 3.2L3.8 6.8z"/><path d="M3.8 10.4L10 13.6l6.2-3.2"/><path d="M3.8 13.6L10 16.8l6.2-3.2"/></svg>
+          บทที่ 2
+        </p>
+        <h3><a href="lessons/02-vu.html">VU ทำงานอย่างไร</a></h3>
+        <p>VU คืออะไร ถ้าไม่ใช่เบราว์เซอร์ ทำไมมันว่างงานตอนรอ response และทำไมเพิ่ม VU แล้ว throughput อาจไม่เพิ่ม</p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+          บทที่ 3
+        </p>
+        <h3><a href="lessons/03-metrics.html">แคตตาล็อก metric</a></h3>
+        <p>metric ทุกตัวที่ k6 รายงาน ชนิด หน่วย วิธีตีความ และวิธีแยกว่าปัญหาอยู่ฝั่งเซิร์ฟเวอร์หรือฝั่งเครือข่าย</p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+          บทที่ 4
+        </p>
+        <h3><a href="lessons/04-percentiles.html">เปอร์เซ็นไทล์ p95 / p99</a></h3>
+        <p>คำนวณเปอร์เซ็นไทล์ด้วยมือทีละขั้น พร้อมกราฟจากข้อมูลจริง 1,155 ค่า ที่แสดงให้เห็นว่าค่าเฉลี่ยกลบหางอย่างไร</p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 14.2a7 7 0 1 1 13.2 0"/><path d="M10 11.4l3.4-3.6"/></svg>
+          บทที่ 5
+        </p>
+        <h3><a href="lessons/05-load-profiles.html">รูปแบบการทดสอบ</a></h3>
+        <p>smoke, load, stress, spike, soak ต่างกันที่จุดประสงค์อย่างไร และแปลง SLO ให้เป็น threshold ได้อย่างไร</p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 4.4h11.2L10 10l5.6 5.6H4.4"/></svg>
+          บทที่ 6
+        </p>
+        <h3><a href="lessons/06-read-results.html">อ่านผลลัพธ์</a></h3>
+        <p>ไล่ทีละบล็อกของสรุปผลท้ายการรัน และวิธีส่งออกผลไปทำกราฟต่อ รวมถึงปัญหาที่ทำให้อ่านผลผิด</p>
+      </div>
+    </div>
+
+    <h2 id="should-read-when">ควรอ่านบทไหนเมื่อไหร่</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เลือกบทตามสถานการณ์ที่กำลังเจออยู่</caption>
+        <thead>
+          <tr>
+            <th class="wrap">สถานการณ์</th>
+            <th class="wrap">อ่านบท</th>
+            <th class="wrap">เหตุผล</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">เพิ่งรู้จัก k6 และยังไม่เคยรันสคริปต์เลย</td>
+            <td class="wrap"><a href="lessons/02-vu.html">บทที่ 2</a> แล้วต่อ <a href="lessons/01-tps.html">บทที่ 1</a></td>
+            <td class="wrap">เข้าใจก่อนว่า VU ทำงานเป็นลูปอย่างไร สูตรในบทที่ 1 จึงจะไม่เป็นแค่การแทนตัวเลข</td>
+          </tr>
+          <tr>
+            <td class="wrap">ต้องตอบหัวหน้าว่าระบบรับได้กี่ request ต่อวินาที</td>
+            <td class="wrap"><a href="lessons/01-tps.html">บทที่ 1</a></td>
+            <td class="wrap">มีสูตรและตัวอย่างการคำนวณย้อนกลับไปหาจำนวน VU ที่ต้องใช้</td>
+          </tr>
+          <tr>
+            <td class="wrap">ผลการรันบอกว่าเร็ว แต่ผู้ใช้จริงยังบ่นว่าช้า</td>
+            <td class="wrap"><a href="lessons/04-percentiles.html">บทที่ 4</a></td>
+            <td class="wrap">อธิบายว่าทำไมค่าเฉลี่ยที่ดูดีจึงอยู่ร่วมกับประสบการณ์ที่แย่ได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">เห็นตัวเลขเต็มหน้าจอแต่ไม่รู้ว่าจะเริ่มอ่านตรงไหน</td>
+            <td class="wrap"><a href="lessons/03-metrics.html">บทที่ 3</a> และ <a href="lessons/06-read-results.html">บทที่ 6</a></td>
+            <td class="wrap">บทที่ 3 ให้ความหมายของแต่ละบรรทัด บทที่ 6 สอนลำดับการอ่าน</td>
+          </tr>
+          <tr>
+            <td class="wrap">ต้องออกแบบการทดสอบชุดใหม่สำหรับฟีเจอร์ที่กำลังจะเปิดตัว</td>
+            <td class="wrap"><a href="lessons/05-load-profiles.html">บทที่ 5</a></td>
+            <td class="wrap">มีตารางเทียบรูปแบบการทดสอบและวิธีแปลง SLO เป็นเกณฑ์ที่วัดได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">threshold ไม่ผ่าน แต่ไม่แน่ใจว่าเป็นความผิดของระบบหรือของสคริปต์</td>
+            <td class="wrap"><a href="troubleshooting.html">แก้ปัญหาที่พบบ่อย</a></td>
+            <td class="wrap">แยกอาการ สาเหตุที่เป็นไปได้ และวิธีแก้ทีละกรณี</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="tools">เครื่องมือที่ใช้คู่กับบทเรียน</h2>
+
+    <p>
+      เครื่องมือทั้งสองทำงานในเบราว์เซอร์ทั้งหมด ไม่มีการส่งข้อมูลออกไปที่ใด
+      และใช้สูตรชุดเดียวกับที่อธิบายในบทเรียน
+    </p>
+
+    <div class="card-grid">
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.2" y="2.8" width="11.6" height="14.4" rx="1.4"/><path d="M7 6.4h6M7.4 10h.01M10 10h.01M12.6 10h.01M7.4 13h.01M10 13h.01M12.6 13h.01"/></svg>
+          เครื่องมือ
+        </p>
+        <h3><a href="tools/calculator.html">เครื่องคำนวณ TPS และ VU</a></h3>
+        <p>ใส่จำนวน VU เวลาตอบสนอง และ think time แล้วดูวิธีคิดทีละบรรทัด พร้อมคำนวณย้อนกลับว่าต้องใช้กี่ VU</p>
+        <p><a class="card__link" href="tools/calculator.html">เปิดเครื่องคำนวณ
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 5.2L12.4 10l-4.8 4.8"/></svg></a></p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8.8" cy="8.8" r="5"/><path d="M12.6 12.6l3.6 3.6"/></svg>
+          เครื่องมือ
+        </p>
+        <h3><a href="tools/latency.html">สำรวจข้อมูล latency จริง</a></h3>
+        <p>กราฟฮิสโตแกรมและเส้น CDF จากข้อมูล 1,155 ค่าที่เก็บจากการรันจริง พร้อมเครื่องคำนวณเปอร์เซ็นไทล์ที่แสดงวิธีคิด</p>
+        <p><a class="card__link" href="tools/latency.html">เปิดหน้าสำรวจข้อมูล
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 5.2L12.4 10l-4.8 4.8"/></svg></a></p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M6.9 10.2l2.1 2.1 4.1-4.4"/></svg>
+          แบบฝึกหัด
+        </p>
+        <h3><a href="quiz.html">แบบทดสอบท้ายบท</a></h3>
+        <p>6 ชุด ชุดละ 6 ข้อ พร้อมเฉลยและคำอธิบายทุกข้อ บันทึกคะแนนที่ดีที่สุดไว้ในเครื่องของคุณ</p>
+        <p><a class="card__link" href="quiz.html">เริ่มทำแบบทดสอบ
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 5.2L12.4 10l-4.8 4.8"/></svg></a></p>
+      </div>
+      <div class="card">
+        <p class="card__meta">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+          อ้างอิง
+        </p>
+        <h3><a href="glossary.html">อภิธานศัพท์</a></h3>
+        <p>ศัพท์เทคนิคกว่า 60 คำ อธิบายเป็นภาษาไทย มีช่องค้นหา และใช้ข้อมูลชุดเดียวกับบทเรียน</p>
+        <p><a class="card__link" href="glossary.html">เปิดอภิธานศัพท์
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.6 5.2L12.4 10l-4.8 4.8"/></svg></a></p>
+      </div>
+    </div>
+
+    <h2 id="before-you-start">ก่อนเริ่มทดลองด้วยตัวเอง</h2>
+
+    <ol class="steps">
+      <li>
+        <strong>ติดตั้ง k6</strong> ตามคู่มือทางการที่
+        <a href="https://grafana.com/docs/k6/latest/set-up/install-k6/" rel="noopener">grafana.com/docs/k6</a>
+        เมื่อติดตั้งแล้วตรวจด้วยคำสั่ง <code>k6 version</code>
+      </li>
+      <li>
+        <strong>เปิด mock server ที่แนบมากับโปรเจกต์นี้</strong> ด้วยคำสั่ง
+        <code>node mock-server/server.mjs</code> จะได้ปลายทางที่ <code>http://localhost:8080</code>
+        ซึ่งมี latency จำลองและจุดทดลองครบพอสำหรับฝึกทุกบท
+      </li>
+      <li>
+        <strong>รัน smoke test ก่อนทุกครั้ง</strong> ด้วยสคริปต์ใน
+        <a href="examples.html">หน้าสคริปต์ตัวอย่าง</a> เพื่อยืนยันว่าปลายทางและสคริปต์พร้อมจริง
+      </li>
+    </ol>
+
+    <div class="callout callout--evidence">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">เรื่องของตัวเลขในเว็บนี้</span>
+      </div>
+      <p>
+        ทุกตัวเลขที่อ้างว่าเป็นผลการรัน มาจากการรันครั้งเดียวที่บันทึกไว้ในโฟลเดอร์
+        <code>docs/evidence/</code> และ <code>assets/data/</code>
+        ส่วนตัวเลขในเครื่องคำนวณเป็นผลจากการแทนค่าในสูตรให้ดูเป็นตัวอย่าง
+        ซึ่งหน้าเครื่องมือจะติดป้ายกำกับไว้ชัดเจนว่าตัวอย่าง ไม่ใช่ผลการวัด
+      </p>
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/site.js"></script>
+
+</body>
+</html>

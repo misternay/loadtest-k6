@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เครื่องคำนวณ TPS และ VU — พร้อมวิธีคิดทีละขั้น | Load Testing ด้วย k6</title>
+<meta name="description" content="เครื่องคำนวณ TPS/RPS จากจำนวน virtual user, คำนวณย้อนกลับหาจำนวน VU ที่ต้องใช้ และช่วยเลือกรูปแบบการทดสอบ พร้อมแสดงวิธีคิดทีละบรรทัดและตรวจสอบค่าที่กรอก">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="calculator" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เครื่องคำนวณในหน้านี้ทำงานด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งาน
+    สูตรและวิธีคิดทั้งหมดอธิบายไว้ในบทที่ 1 และบทที่ 5 แล้ว
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><rect x="4.2" y="2.8" width="11.6" height="14.4" rx="1.4"/><path d="M7 6.4h6M7.4 10h.01M10 10h.01M12.6 10h.01M7.4 13h.01M10 13h.01M12.6 13h.01"/></svg>
+      เครื่องมือ
+    </p>
+
+    <h1>เครื่องคำนวณ TPS และ VU</h1>
+
+    <p class="lede">
+      เครื่องคำนวณทั้งสามตัวนี้ใช้สูตรเดียวกับที่อธิบายในบทที่ 1 และบทที่ 5
+      จุดต่างจากเครื่องคิดเลขทั่วไปคือมันแสดงวิธีคิดทีละบรรทัดพร้อมค่าที่แทนลงไปแล้ว
+      เพื่อให้ตรวจสอบย้อนกลับได้ว่าได้ตัวเลขนั้นมาอย่างไร
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+        ทฤษฎี: <a href="../lessons/01-tps.html">บทที่ 1</a>, <a href="../lessons/05-load-profiles.html">บทที่ 5</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ไม่ส่งข้อมูลออกไปที่ใด
+      </div>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">ตัวเลขที่ได้จากหน้านี้คืออะไร</span>
+      </div>
+      <p>
+        ผลลัพธ์ทุกตัวเป็นการคำนวณจากสูตร <strong>ไม่ใช่ผลการวัด</strong>
+        มันบอกว่าทฤษฎีคาดว่าจะได้เท่าไร ซึ่งใช้ตั้งต้นก่อนรันจริงได้ แต่ไม่สามารถใช้แทนการรันจริงได้
+        เพราะสูตรสมมติว่า VU ทำงานเต็มเวลาและระบบตอบสนองสม่ำเสมอ
+        ให้ใช้ตัวเลขจากหน้านี้เพื่อกำหนดค่าเริ่มต้น แล้วใช้ผลการรันจริงเพื่อยืนยัน
+      </p>
+    </div>
+
+    <h2 id="tps">1. คำนวณ TPS จากจำนวน VU</h2>
+
+    <p>
+      ใส่ค่าทั้งสี่ช่องแล้วกดคำนวณ ระบบจะแสดงเวลาต่อรอบ จำนวนรอบต่อวินาที
+      และ TPS พร้อมค่าที่เทียบกับการเผลอใช้เวลาตอบสนองอย่างเดียวโดยไม่นับ think time
+    </p>
+
+    <form id="form-tps" novalidate>
+      <div class="form-grid">
+        <div class="field">
+          <label for="tps-N">จำนวน VU (N) <span class="hint">จำนวนเต็ม ตั้งแต่ 1</span></label>
+          <input type="number" id="tps-N" name="N" min="1" step="1" inputmode="numeric" value="10" aria-describedby="err-tps-N">
+          <p class="field-error" id="err-tps-N" hidden></p>
+        </div>
+        <div class="field">
+          <label for="tps-R">request ต่อ 1 iteration (R) <span class="hint">จำนวนเต็ม ตั้งแต่ 1</span></label>
+          <input type="number" id="tps-R" name="R" min="1" step="1" inputmode="numeric" value="1" aria-describedby="err-tps-R">
+          <p class="field-error" id="err-tps-R" hidden></p>
+        </div>
+        <div class="field">
+          <label for="tps-Rt">เวลาตอบสนองเฉลี่ย (Rt) <span class="hint">มิลลิวินาที มากกว่า 0</span></label>
+          <input type="number" id="tps-Rt" name="Rt" min="0.01" step="0.01" inputmode="decimal" value="54.25" aria-describedby="err-tps-Rt">
+          <p class="field-error" id="err-tps-Rt" hidden></p>
+        </div>
+        <div class="field">
+          <label for="tps-Tt">think time (Tt) <span class="hint">มิลลิวินาที ใส่ 0 ได้</span></label>
+          <input type="number" id="tps-Tt" name="Tt" min="0" step="0.01" inputmode="decimal" value="50" aria-describedby="err-tps-Tt">
+          <p class="field-error" id="err-tps-Tt" hidden></p>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn--primary" type="submit">คำนวณ</button>
+        <button class="btn" type="button" data-example="tps">ใส่ค่าจากการรันจริง</button>
+        <button class="btn" type="reset">ล้างค่า</button>
+        <span id="copy-tps"></span>
+      </div>
+    </form>
+
+    <div class="panel" id="tps-result" role="status" aria-live="polite">
+      <div class="panel__head">
+        <h3>ผลลัพธ์</h3>
+      </div>
+      <div class="panel__body">
+        <p class="panel--empty" id="tps-empty">ยังไม่มีผลลัพธ์ กรอกค่าแล้วกดปุ่มคำนวณ</p>
+        <div id="tps-output" hidden></div>
+      </div>
+    </div>
+
+    <h2 id="vu">2. คำนวณย้อนกลับ: ต้องใช้ VU เท่าไร</h2>
+
+    <p>
+      ใช้เมื่อรู้เป้าหมายของ throughput แต่ยังไม่รู้ว่าจะต้องตั้งจำนวน VU เท่าไร
+      เครื่องจะบอกกำลังผลิตต่อ VU หนึ่งตัว และจำนวน VU ที่ต้องใช้โดยปัดขึ้นเสมอ
+    </p>
+
+    <form id="form-vu" novalidate>
+      <div class="form-grid">
+        <div class="field">
+          <label for="vu-targetTps">TPS เป้าหมาย <span class="hint">request ต่อวินาที มากกว่า 0</span></label>
+          <input type="number" id="vu-targetTps" name="targetTps" min="0.01" step="0.01" inputmode="decimal" value="500" aria-describedby="err-vu-targetTps">
+          <p class="field-error" id="err-vu-targetTps" hidden></p>
+        </div>
+        <div class="field">
+          <label for="vu-R">request ต่อ 1 iteration (R) <span class="hint">จำนวนเต็ม ตั้งแต่ 1</span></label>
+          <input type="number" id="vu-R" name="R" min="1" step="1" inputmode="numeric" value="1" aria-describedby="err-vu-R">
+          <p class="field-error" id="err-vu-R" hidden></p>
+        </div>
+        <div class="field">
+          <label for="vu-Rt">เวลาตอบสนองเฉลี่ย (Rt) <span class="hint">มิลลิวินาที มากกว่า 0</span></label>
+          <input type="number" id="vu-Rt" name="Rt" min="0.01" step="0.01" inputmode="decimal" value="50" aria-describedby="err-vu-Rt">
+          <p class="field-error" id="err-vu-Rt" hidden></p>
+        </div>
+        <div class="field">
+          <label for="vu-Tt">think time (Tt) <span class="hint">มิลลิวินาที ใส่ 0 ได้</span></label>
+          <input type="number" id="vu-Tt" name="Tt" min="0" step="0.01" inputmode="decimal" value="150" aria-describedby="err-vu-Tt">
+          <p class="field-error" id="err-vu-Tt" hidden></p>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn--primary" type="submit">คำนวณจำนวน VU</button>
+        <button class="btn" type="button" data-example="vu">ใส่ค่าจากตัวอย่างในบทที่ 1</button>
+        <button class="btn" type="reset">ล้างค่า</button>
+        <span id="copy-vu"></span>
+      </div>
+    </form>
+
+    <div class="panel" id="vu-result" role="status" aria-live="polite">
+      <div class="panel__head">
+        <h3>ผลลัพธ์</h3>
+      </div>
+      <div class="panel__body">
+        <p class="panel--empty" id="vu-empty">ยังไม่มีผลลัพธ์ กรอกค่าแล้วกดปุ่มคำนวณ</p>
+        <div id="vu-output" hidden></div>
+      </div>
+    </div>
+
+    <h2 id="profile">3. เครื่องช่วยเลือกรูปแบบการทดสอบ</h2>
+
+    <p>
+      ใส่เป้าหมายกับค่าที่วัดได้ แล้วเครื่องจะแนะนำว่ารูปแบบใดควรเริ่มก่อน
+      พร้อมจำนวน VU อ้างอิงและ stages ตัวอย่างที่คัดลอกไปใช้ได้ทันที
+    </p>
+
+    <form id="form-profile" novalidate>
+      <div class="form-grid">
+        <div class="field">
+          <label for="prof-targetTps">TPS เป้าหมาย <span class="hint">request ต่อวินาที มากกว่า 0</span></label>
+          <input type="number" id="prof-targetTps" name="targetTps" min="0.01" step="0.01" inputmode="decimal" value="150" aria-describedby="err-prof-targetTps">
+          <p class="field-error" id="err-prof-targetTps" hidden></p>
+        </div>
+        <div class="field">
+          <label for="prof-p95Ms">เวลาตอบสนอง p95 <span class="hint">มิลลิวินาที มากกว่า 0</span></label>
+          <input type="number" id="prof-p95Ms" name="p95Ms" min="0.01" step="0.01" inputmode="decimal" value="180" aria-describedby="err-prof-p95Ms">
+          <p class="field-error" id="err-prof-p95Ms" hidden></p>
+        </div>
+        <div class="field">
+          <label for="prof-Tt">think time (Tt) <span class="hint">มิลลิวินาที ใส่ 0 ได้</span></label>
+          <input type="number" id="prof-Tt" name="Tt" min="0" step="0.01" inputmode="decimal" value="60" aria-describedby="err-prof-Tt">
+          <p class="field-error" id="err-prof-Tt" hidden></p>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn--primary" type="submit">แนะนำรูปแบบการทดสอบ</button>
+        <button class="btn" type="button" data-example="profile">ใส่ค่าตัวอย่าง</button>
+        <button class="btn" type="reset">ล้างค่า</button>
+        <span id="copy-profile"></span>
+      </div>
+    </form>
+
+    <div class="panel" id="profile-result" role="status" aria-live="polite">
+      <div class="panel__head">
+        <h3>ผลลัพธ์</h3>
+      </div>
+      <div class="panel__body">
+        <p class="panel--empty" id="profile-empty">ยังไม่มีผลลัพธ์ กรอกค่าแล้วกดปุ่มคำนวณ</p>
+        <div id="profile-output" hidden></div>
+      </div>
+    </div>
+
+    <h2 id="formula-reference">สูตรที่ใช้ในหน้านี้</h2>
+
+    <div class="working">
+      <span class="w-line">iteration_duration = (R × Rt) + Tt                        [ms]</span>
+      <span class="w-line">iterations/s       = N × 1000 ÷ iteration_duration</span>
+      <span class="w-line">TPS                = iterations/s × R</span>
+      <span class="w-line">TPS ต่อ VU         = R × 1000 ÷ iteration_duration</span>
+      <span class="w-line">VU ที่ต้องใช้      = ⌈TPS เป้าหมาย ÷ TPS ต่อ VU⌉</span>
+      <span class="w-line">request ลอยพร้อมกัน = (TPS ÷ R) × Rt ÷ 1000             [กฎของ Little]</span>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> สูตรทั้งหมดตรงกับที่อธิบายไว้ใน
+      <a href="../lessons/01-tps.html">บทที่ 1</a> และค่าตั้งต้นในช่องกรอกเป็นค่าจริงจากการรัน
+      k6 v2.2.0 (Rt = 54.25 ms, Tt = 50 ms) ใช้กดปุ่ม "ใส่ค่าจากการรันจริง" เพื่อกลับมาที่ค่านี้ได้เสมอ
+      โค้ดคำนวณอยู่ในไฟล์ <code>assets/js/calc.js</code> และมีชุดทดสอบที่รันได้ด้วย node
+      อยู่ที่ <code>scripts/test-calc.mjs</code>
+    </p>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/calc.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  var WARN = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>';
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6.__ctx;
+    var calc = window.LTK6.calc;
+    var fmt = window.LTK6.format;
+    var copyButton = window.LTK6.copyButton;
+    if (!ctx || !calc) return;
+
+    /* ---------- ตัวช่วยแสดงข้อผิดพลาด ---------- */
+
+    function showErrors(prefix, names, errors) {
+      var byField = {};
+      errors.forEach(function (e) {
+        if (!byField[e.field]) byField[e.field] = [];
+        byField[e.field].push(e);
+      });
+      names.forEach(function (n) {
+        var input = document.getElementById(prefix + n);
+        var box = document.getElementById('err-' + prefix + n);
+        if (!input || !box) return;
+        var list = byField[n];
+        if (list && list.length) {
+          input.setAttribute('aria-invalid', 'true');
+          box.hidden = false;
+          box.innerHTML = WARN + '<span>' + list.map(function (e) {
+            return esc(e.message) +
+              '<span class="fix">วิธีแก้: ' + esc(e.fix) + '</span>';
+          }).join('') + '</span>';
+        } else {
+          input.removeAttribute('aria-invalid');
+          box.hidden = true;
+          box.innerHTML = '';
+        }
+      });
+    }
+
+    function collect(prefix, names) {
+      var out = {};
+      names.forEach(function (n) {
+        var el = document.getElementById(prefix + n);
+        out[n] = el ? el.value : '';
+      });
+      return out;
+    }
+
+    /* ---------- เรนเดอร์วิธีคิดทีละขั้น ---------- */
+
+    function stepsHtml(steps) {
+      var html = '<ol class="steps" style="margin-top:1.1em">';
+      steps.forEach(function (s) {
+        html += '<li><strong>' + esc(s.title) + '</strong>' +
+          '<div class="working">' +
+          '<span class="w-line">' + esc(s.formula) + '</span>' +
+          '<span class="w-line">= ' + esc(s.substituted) + '</span>' +
+          '<span class="w-line w-result">= ' + esc(s.value) + '</span>' +
+          '</div>' +
+          '<p class="muted" style="font-size:.83rem;margin-bottom:.2em">' + esc(s.note) + '</p>' +
+          '</li>';
+      });
+      html += '</ol>';
+      return html;
+    }
+
+    function lineHtml(label, value, key) {
+      return '<div class="result-line' + (key ? ' result-line--key' : '') + '">' +
+        '<dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd></div>';
+    }
+
+    /* ---------- 1) TPS calculator ---------- */
+
+    var TPS_FIELDS = ['N', 'R', 'Rt', 'Tt'];
+    var tpsForm = document.getElementById('form-tps');
+
+    function runTps() {
+      var input = collect('tps-', TPS_FIELDS);
+      var res = calc.tpsCalculator(input);
+      if (!res.ok) {
+        showErrors('tps-', TPS_FIELDS, res.errors);
+        document.getElementById('tps-output').hidden = true;
+        document.getElementById('tps-empty').hidden = false;
+        document.getElementById('tps-empty').textContent =
+          'ยังคำนวณไม่ได้ เพราะมีช่องที่ต้องแก้ไขก่อน ดูข้อความเตือนใต้ช่องที่กรอก';
+        return;
+      }
+      showErrors('tps-', TPS_FIELDS, []);
+
+      var out = document.getElementById('tps-output');
+      var html = '<dl class="result-list">' +
+        lineHtml('เวลาต่อ 1 iteration', fmt.ms(res.iterationDurationMs), false) +
+        lineHtml('iterations ต่อวินาที', fmt.number(res.iterationsPerSecond, 2) + ' ครั้ง/s', false) +
+        lineHtml('TPS (request ต่อวินาที)', fmt.number(res.tps, 2), true) +
+        lineHtml('TPS ต่อ VU หนึ่งตัว', fmt.number(res.tpsPerVu, 4) + ' request/s', false) +
+        lineHtml('ถ้าคิดจากเวลาตอบสนองอย่างเดียว', fmt.number(res.tpsIfResponseOnly, 2) +
+          ' (สูงเกินจริง ' + fmt.number(res.overestimateFactor, 2) + ' เท่า)', false) +
+        lineHtml('request ลอยพร้อมกัน (Little)', fmt.number(res.little.requestsInFlight, 2) + ' request', false) +
+        lineHtml('สัดส่วนเวลาที่ VU ถูกจอง', fmt.pct(res.little.busyRatio * 100, 1), false) +
+        '</dl>' + stepsHtml(res.steps);
+
+      out.innerHTML = html;
+      out.hidden = false;
+      document.getElementById('tps-empty').hidden = true;
+      mountCopy('copy-tps', function () { return plainTps(res); }, 'คัดลอกผลลัพธ์');
+    }
+
+    function plainTps(res) {
+      var i = res.input;
+      return [
+        'คำนวณ TPS — วิธีคิดทีละขั้น',
+        'N = ' + i.N + ' VUs, R = ' + i.R + ', Rt = ' + i.Rt + ' ms, Tt = ' + i.Tt + ' ms',
+        '',
+        '1) iteration_duration = (R × Rt) + Tt = (' + i.R + ' × ' + i.Rt + ') + ' + i.Tt +
+          ' = ' + fmt.number(res.iterationDurationMs, 2) + ' ms',
+        '2) iterations/s = N × 1000 ÷ iteration_duration = ' + i.N + ' × 1000 ÷ ' +
+          fmt.number(res.iterationDurationMs, 2) + ' = ' + fmt.number(res.iterationsPerSecond, 2) + ' iterations/s',
+        '3) TPS = iterations/s × R = ' + fmt.number(res.iterationsPerSecond, 2) + ' × ' + i.R +
+          ' = ' + fmt.number(res.tps, 2) + ' request/s',
+        '',
+        'TPS ต่อ VU หนึ่งตัว = ' + fmt.number(res.tpsPerVu, 4) + ' request/s',
+        'ถ้าคิดจากเวลาตอบสนองอย่างเดียวจะได้ ' + fmt.number(res.tpsIfResponseOnly, 2) +
+          ' request/s ซึ่งสูงเกินจริง ' + fmt.number(res.overestimateFactor, 2) + ' เท่า',
+        'กฎของ Little: request ลอยพร้อมกัน = ' + fmt.number(res.little.requestsInFlight, 2) + ' request',
+        '',
+        'หมายเหตุ: ตัวเลขนี้ได้จากการคำนวณตามสูตร ไม่ใช่ผลการวัดจากเครื่องจริง'
+      ].join('\n');
+    }
+
+    tpsForm.addEventListener('submit', function (evt) { evt.preventDefault(); runTps(); });
+    tpsForm.addEventListener('input', function () { runTps(); });
+    tpsForm.addEventListener('reset', function () {
+      setTimeout(function () {
+        showErrors('tps-', TPS_FIELDS, []);
+        document.getElementById('tps-output').hidden = true;
+        document.getElementById('tps-empty').hidden = false;
+        document.getElementById('tps-empty').textContent = 'ยังไม่มีผลลัพธ์ กรอกค่าแล้วกดปุ่มคำนวณ';
+        clearCopy('copy-tps');
+      }, 0);
+    });
+    tpsForm.querySelector('[data-example]').addEventListener('click', function () {
+      setValues('tps-', { N: 10, R: 1, Rt: 54.25, Tt: 50 });
+      runTps();
+    });
+
+    /* ---------- 2) VU calculator ---------- */
+
+    var VU_FIELDS = ['targetTps', 'R', 'Rt', 'Tt'];
+    var vuForm = document.getElementById('form-vu');
+
+    function runVu() {
+      var input = collect('vu-', VU_FIELDS);
+      var res = calc.vuCalculator(input);
+      if (!res.ok) {
+        showErrors('vu-', VU_FIELDS, res.errors);
+        document.getElementById('vu-output').hidden = true;
+        document.getElementById('vu-empty').hidden = false;
+        document.getElementById('vu-empty').textContent =
+          'ยังคำนวณไม่ได้ เพราะมีช่องที่ต้องแก้ไขก่อน ดูข้อความเตือนใต้ช่องที่กรอก';
+        return;
+      }
+      showErrors('vu-', VU_FIELDS, []);
+
+      var out = document.getElementById('vu-output');
+      var html = '<dl class="result-list">' +
+        lineHtml('เวลาต่อ 1 iteration', fmt.ms(res.iterationDurationMs), false) +
+        lineHtml('TPS ต่อ VU หนึ่งตัว', fmt.number(res.tpsPerVu, 4) + ' request/s', false) +
+        lineHtml('จำนวน VU ที่ต้องใช้', fmt.int(res.vusRequired) + ' VUs', true) +
+        lineHtml('ค่าไม่ปัดเศษ', fmt.number(res.exactVus, 4) + ' VUs', false) +
+        lineHtml('ถ้าเผื่อกำลังเพิ่ม 20%', fmt.int(res.headroomVus) + ' VUs', false) +
+        lineHtml('request ลอยพร้อมกันขั้นต่ำ', fmt.number(res.little.requestsInFlight, 2) + ' request', false) +
+        '</dl>' + stepsHtml(res.steps);
+
+      out.innerHTML = html;
+      out.hidden = false;
+      document.getElementById('vu-empty').hidden = true;
+      mountCopy('copy-vu', function () { return plainVu(res); }, 'คัดลอกผลลัพธ์');
+    }
+
+    function plainVu(res) {
+      var i = res.input;
+      return [
+        'คำนวณจำนวน VU ย้อนกลับ — วิธีคิดทีละขั้น',
+        'TPS เป้าหมาย = ' + i.targetTps + ', R = ' + i.R + ', Rt = ' + i.Rt + ' ms, Tt = ' + i.Tt + ' ms',
+        '',
+        '1) iteration_duration = (R × Rt) + Tt = (' + i.R + ' × ' + i.Rt + ') + ' + i.Tt +
+          ' = ' + fmt.number(res.iterationDurationMs, 2) + ' ms',
+        '2) TPS ต่อ VU = R × 1000 ÷ iteration_duration = ' + i.R + ' × 1000 ÷ ' +
+          fmt.number(res.iterationDurationMs, 2) + ' = ' + fmt.number(res.tpsPerVu, 4) + ' request/s',
+        '3) VU = ceil(TPS เป้าหมาย ÷ TPS ต่อ VU) = ceil(' + i.targetTps + ' ÷ ' +
+          fmt.number(res.tpsPerVu, 4) + ') = ' + res.vusRequired + ' VUs',
+        '',
+        'request ลอยพร้อมกันขั้นต่ำ (กฎของ Little) = ' + fmt.number(res.little.requestsInFlight, 2) + ' request',
+        'หมายเหตุ: ตัวเลขนี้ได้จากการคำนวณตามสูตร ไม่ใช่ผลการวัดจากเครื่องจริง'
+      ].join('\n');
+    }
+
+    vuForm.addEventListener('submit', function (evt) { evt.preventDefault(); runVu(); });
+    vuForm.addEventListener('input', function () { runVu(); });
+    vuForm.addEventListener('reset', function () {
+      setTimeout(function () {
+        showErrors('vu-', VU_FIELDS, []);
+        document.getElementById('vu-output').hidden = true;
+        document.getElementById('vu-empty').hidden = false;
+        document.getElementById('vu-empty').textContent = 'ยังไม่มีผลลัพธ์ กรอกค่าแล้วกดปุ่มคำนวณ';
+        clearCopy('copy-vu');
+      }, 0);
+    });
+    vuForm.querySelector('[data-example]').addEventListener('click', function () {
+      setValues('vu-', { targetTps: 500, R: 1, Rt: 50, Tt: 150 });
+      runVu();
+    });
+
+    /* ---------- 3) Load profile helper ---------- */
+
+    var PROF_FIELDS = ['targetTps', 'p95Ms', 'Tt'];
+    var profForm = document.getElementById('form-profile');
+
+    function runProfile() {
+      var input = collect('prof-', PROF_FIELDS);
+      var res = calc.recommendProfile(input);
+      if (!res.ok) {
+        showErrors('prof-', PROF_FIELDS, res.errors);
+        document.getElementById('profile-output').hidden = true;
+        document.getElementById('profile-empty').hidden = false;
+        document.getElementById('profile-empty').textContent =
+          'ยังแนะนำไม่ได้ เพราะมีช่องที่ต้องแก้ไขก่อน ดูข้อความเตือนใต้ช่องที่กรอก';
+        return;
+      }
+      showErrors('prof-', PROF_FIELDS, []);
+
+      var stageRows = res.stages.map(function (s) {
+        return '<tr><td>' + esc(s.duration) + '</td><td class="num">' + fmt.int(s.target) + '</td></tr>';
+      }).join('');
+
+      var html = '<dl class="result-list">' +
+        lineHtml('รูปแบบที่แนะนำ', res.profileTitle, true) +
+        lineHtml('TPS ต่อ VU หนึ่งตัว', fmt.number(res.tpsPerVu, 4) + ' request/s', false) +
+        lineHtml('จำนวน VU อ้างอิง', fmt.int(res.vus) + ' VUs', false) +
+        '</dl>' +
+        '<p style="margin-top:1em">' + esc(res.reason) + '</p>' +
+        '<p class="muted" style="font-size:.85rem">จุดประสงค์ของรูปแบบนี้: ' + esc(res.purpose) + '</p>' +
+        '<h4>stages ตัวอย่าง</h4>' +
+        '<div class="table-wrap"><table class="data">' +
+        '<caption>stages ที่แนะนำสำหรับรูปแบบ ' + esc(res.profile) + ' (ตัวอย่าง ต้องปรับหลังรันจริง)</caption>' +
+        '<thead><tr><th>ระยะเวลา</th><th class="num">VU เป้าหมาย</th></tr></thead>' +
+        '<tbody>' + stageRows + '</tbody></table></div>' +
+        '<h4>options ที่คัดลอกไปใช้ได้</h4>' +
+        '<div class="code-block"><div class="code-block__head">' +
+        '<span class="code-block__title">options.js — ตัวอย่างสำหรับรูปแบบ ' + esc(res.profile) + '</span>' +
+        '</div><pre><code>' + esc(res.optionsSnippet) + '</code></pre></div>' +
+        '<h4>ข้อควรพิจารณา</h4><ul>' +
+        res.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') +
+        '</ul>' +
+        '<h4>ลำดับการทดสอบที่แนะนำ</h4><ul>' +
+        res.follow.map(function (f) {
+          return '<li><strong>' + esc(f.id) + '</strong> — ' + esc(f.when) + '</li>';
+        }).join('') + '</ul>';
+
+      var out = document.getElementById('profile-output');
+      out.innerHTML = html;
+      out.hidden = false;
+      document.getElementById('profile-empty').hidden = true;
+
+      /* ปุ่มคัดลอกโค้ดถูกใส่ให้อัตโนมัติโดย site.js เมื่อมี .code-block ใหม่ */
+      var pre = out.querySelector('.code-block pre');
+      if (pre && window.LTK6.copyButton) {
+        var head = out.querySelector('.code-block__head');
+        if (head && !head.querySelector('.copy-btn')) {
+          head.appendChild(copyButton(function () { return pre.innerText; }, 'คัดลอกโค้ด'));
+        }
+      }
+      mountCopy('copy-profile', function () { return plainProfile(res); }, 'คัดลอกผลลัพธ์');
+    }
+
+    function plainProfile(res) {
+      var stages = res.stages.map(function (s) {
+        return '  { duration: \'' + s.duration + '\', target: ' + s.target + ' },';
+      }).join('\n');
+      return [
+        'แนะนำรูปแบบการทดสอบ',
+        'TPS เป้าหมาย = ' + res.input.targetTps +
+          ', p95 = ' + res.input.p95Ms + ' ms, think time = ' + res.input.thinkTimeMs + ' ms',
+        '',
+        'รูปแบบที่แนะนำ: ' + res.profileTitle,
+        'เหตุผล: ' + res.reason,
+        'TPS ต่อ VU = ' + fmt.number(res.tpsPerVu, 4) + ' request/s → VU อ้างอิง ' + res.vus + ' ตัว',
+        '',
+        'stages ตัวอย่าง:',
+        stages,
+        '',
+        'ข้อควรพิจารณา:',
+        res.notes.map(function (n) { return '  - ' + n; }).join('\n'),
+        '',
+        'หมายเหตุ: เป็นการคำนวณตามสูตร closed model ไม่ใช่ผลการวัด ต้องปรับหลังรันจริง'
+      ].join('\n');
+    }
+
+    profForm.addEventListener('submit', function (evt) { evt.preventDefault(); runProfile(); });
+    profForm.addEventListener('input', function () { runProfile(); });
+    profForm.addEventListener('reset', function () {
+      setTimeout(function () {
+        showErrors('prof-', PROF_FIELDS, []);
+        document.getElementById('profile-output').hidden = true;
+        document.getElementById('profile-empty').hidden = false;
+        document.getElementById('profile-empty').textContent = 'ยังไม่มีผลลัพธ์ กรอกค่าแล้วกดปุ่มคำนวณ';
+        clearCopy('copy-profile');
+      }, 0);
+    });
+    profForm.querySelector('[data-example]').addEventListener('click', function () {
+      setValues('prof-', { targetTps: 150, p95Ms: 180, Tt: 60 });
+      runProfile();
+    });
+
+    /* ---------- ตัวช่วยทั่วไป ---------- */
+
+    function setValues(prefix, values) {
+      Object.keys(values).forEach(function (k) {
+        var el = document.getElementById(prefix + k);
+        if (el) el.value = values[k];
+      });
+    }
+
+    function mountCopy(slotId, getText, label) {
+      var slot = document.getElementById(slotId);
+      if (!slot || !copyButton) return;
+      if (!slot.querySelector('.copy-btn')) {
+        slot.appendChild(copyButton(getText, label));
+      }
+    }
+
+    function clearCopy(slotId) {
+      var slot = document.getElementById(slotId);
+      if (slot) slot.innerHTML = '';
+    }
+
+    /* คำนวณครั้งแรกให้เห็นผลทันทีเมื่อเปิดหน้า */
+    runTps();
+    runVu();
+    runProfile();
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>สคริปต์ตัวอย่าง 5 แบบ — smoke load stress spike soak | Load Testing ด้วย k6</title>
+<meta name="description" content="สคริปต์ k6 ตัวอย่างห้าแบบที่รันได้จริง พร้อมโค้ดเต็ม ปุ่มคัดลอก ลิงก์ดาวน์โหลด คำสั่งรันแบบติดตั้งในเครื่องและแบบ Docker และคำเตือนเรื่องปลายทางที่ปลอดภัย">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="examples" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    หน้านี้ต้องใช้ JavaScript ในการอ่านไฟล์สคริปต์มาแสดง
+    กรุณาเปิด JavaScript แล้วโหลดหน้าใหม่ หรือดาวน์โหลดไฟล์ได้โดยตรงจากโฟลเดอร์ examples/
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+      อ้างอิง
+    </p>
+
+    <h1>สคริปต์ตัวอย่าง 5 แบบ</h1>
+
+    <p class="lede">
+      สคริปต์ทั้งห้าตัวนี้เป็นโค้ด k6 จริงที่รันได้ ไม่ใช่โครงร่าง
+      ทุกไฟล์มีกลไกตรวจปลายทางก่อนเริ่มรัน ถ้าปลายทางไม่อยู่ในรายการที่อนุญาต สคริปต์จะหยุดทันที
+      โดยไม่สร้างโหลดใด ๆ
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+        ทฤษฎี: <a href="lessons/05-load-profiles.html">บทที่ 5</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.4 14.2a7 7 0 1 1 13.2 0"/><path d="M10 11.4l3.4-3.6"/></svg>
+        ปลายทาง: localhost:8080 หรือ test.k6.io
+      </div>
+    </div>
+
+    <div class="callout callout--danger">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        <span class="label">อ่านก่อนรันสคริปต์ใด ๆ</span>
+      </div>
+      <p>
+        สคริปต์เหล่านี้ตั้งค่าเริ่มต้นให้ยิงไปที่ <code>http://localhost:8080</code> เท่านั้น
+        และยอมรับ <code>test.k6.io</code> เป็นทางเลือกที่สอง ถ้าต้องการยิงไปที่อื่น
+        ต้องตั้ง <code>ALLOW_ANY_TARGET=1</code> และคุณต้องมีสิทธิ์ทดสอบระบบนั้นจริง
+      </p>
+      <p>
+        การยิงโหลดใส่ระบบของผู้อื่นโดยไม่ได้รับอนุญาตเข้าข่ายการโจมตีและอาจผิดกฎหมาย
+        ให้ใช้สภาพแวดล้อมทดสอบแทนระบบที่ผู้ใช้จริงใช้งานอยู่เสมอ
+        และแจ้งผู้ดูแลระบบปลายทางล่วงหน้าทุกครั้ง
+      </p>
+    </div>
+
+    <h2 id="prepare">เตรียมปลายทางสำหรับฝึก</h2>
+
+    <p>
+      โปรเจกต์นี้แนบ mock server ที่ไม่ต้องติดตั้งอะไรเพิ่ม มันมี latency จำลองและมีจุดทดลอง
+      ครบพอสำหรับฝึกทุกบท ลองเปิดดูก่อนว่ามีเส้นทางอะไรให้ใช้บ้าง
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">เปิด mock server (ไม่ต้องใช้ dependency ภายนอก)</span>
+      </div>
+      <pre><code># รันจากโฟลเดอร์ loadtest-k6
+node mock-server/server.mjs
+
+# ตรวจว่าเปิดได้แล้ว
+curl -i http://localhost:8080/api/items
+
+# เส้นทางที่มีให้ทดลอง
+#   GET /health                    ตรวจว่ายังทำงานอยู่
+#   GET /api/items                 รายการสินค้า 20 ชิ้น
+#   GET /api/items/{id}            สินค้ารายชิ้น
+#   GET /api/always-404            ตอบ 404 ทุกครั้ง (สำหรับทดสอบ expected_response)
+#   GET /api/toggle-slow           สลับโหมดช้า (+400 ms)
+#   GET /api/toggle-fail?rate=0.2  ตั้งอัตราความล้มเหลวจำลอง</code></pre>
+    </div>
+
+    <h2 id="catalog">ภาพรวมสคริปต์ทั้งห้า</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>สคริปต์ตัวอย่าง ไฟล์ จุดประสงค์ และระยะเวลาที่ใช้</caption>
+        <thead>
+          <tr>
+            <th>ไฟล์</th>
+            <th class="wrap">จุดประสงค์</th>
+            <th class="wrap">รูปแบบภาระ</th>
+            <th class="wrap">ใช้เวลา</th>
+            <th class="wrap">เกณฑ์ที่ตั้งไว้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">smoke.js</td>
+            <td class="wrap">ยืนยันว่าสคริปต์ถูกและปลายทางตอบได้</td>
+            <td class="wrap">2 VU คงที่</td>
+            <td class="wrap">20 วินาที</td>
+            <td class="wrap">เพดานสุขภาพ p(95) ต่ำกว่า 1000 ms, ความผิดพลาดต่ำกว่า 1%, check ผ่านเกิน 99% (smoke ไม่ได้ตัดสิน SLO)</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">load.js</td>
+            <td class="wrap">วัดที่ภาวะใช้งานตามที่คาดไว้</td>
+            <td class="wrap">ramping-vus ขึ้นถึง 10 VU แล้วถือไว้</td>
+            <td class="wrap">12 นาที</td>
+            <td class="wrap">p(95) ต่ำกว่า 500 ms, p(99) ต่ำกว่า 1500 ms, ความผิดพลาดต่ำกว่า 1%</td>
+          </tr>
+          <tr>
+            <td class="code-cell">stress.js</td>
+            <td class="wrap">หาจุดอิ่มตัวและดูว่าระบบพังแบบไหน</td>
+            <td class="wrap">ไต่ขึ้นเป็นขั้นถึง 4 เท่าของภาวะปกติ</td>
+            <td class="wrap">17 นาที</td>
+            <td class="wrap">ความผิดพลาดต่ำกว่า 5% พร้อมหยุดอัตโนมัติถ้าเกิน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">spike.js</td>
+            <td class="wrap">ดูการรับภาระกระชากและการฟื้นตัว</td>
+            <td class="wrap">กระชากจาก 5 ขึ้น 50 VU ใน 20 วินาที</td>
+            <td class="wrap">9 นาที</td>
+            <td class="wrap">ความผิดพลาดต่ำกว่า 10%, p(95) ต่ำกว่า 3000 ms</td>
+          </tr>
+          <tr>
+            <td class="code-cell">soak.js</td>
+            <td class="wrap">หารอยรั่วหน่วยความจำและการเสื่อมสภาพ</td>
+            <td class="wrap">ถือ 10 VU ต่อเนื่อง</td>
+            <td class="wrap">1 ชั่วโมง 4 นาที</td>
+            <td class="wrap">p(95) ต่ำกว่า 500 ms, p(99) ต่ำกว่า 1000 ms, ความผิดพลาดต่ำกว่า 1%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="load-state" class="panel--empty" role="status" aria-live="polite">
+      กำลังอ่านไฟล์สคริปต์
+    </div>
+
+    <div id="scripts-host"></div>
+
+    <h2 id="run-local">วิธีรันแบบติดตั้งในเครื่อง</h2>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">คำสั่งรันสคริปต์ด้วย k6 ที่ติดตั้งในเครื่อง</span>
+      </div>
+      <pre><code># 1) เปิด mock server ไว้ในเทอร์มินัลหนึ่ง
+node mock-server/server.mjs
+
+# 2) เปิดอีกเทอร์มินัล แล้วรันตามลำดับนี้เสมอ
+cd loadtest-k6
+
+# ยืนยันว่าทุกอย่างพร้อม — ใช้เวลา 20 วินาที
+k6 run -e BASE_URL=http://localhost:8080 examples/smoke.js
+
+# วัดที่ภาวะเป้าหมาย — 12 นาที
+k6 run -e BASE_URL=http://localhost:8080 examples/load.js
+
+# หาจุดอิ่มตัว — 17 นาที
+k6 run -e BASE_URL=http://localhost:8080 -e BASE_VUS=5 examples/stress.js
+
+# ดูการรับภาระกระชาก — 9 นาที
+k6 run -e BASE_URL=http://localhost:8080 -e SPIKE_VUS=30 examples/spike.js
+
+# หาปัญหาระยะยาว — ปรับให้สั้นลงได้ด้วย HOLD
+k6 run -e BASE_URL=http://localhost:8080 -e VUS=5 -e HOLD=10m examples/soak.js
+
+# เทียบกับปลายทางสาธารณะที่ทำไว้สำหรับทดสอบโดยเฉพาะ
+k6 run -e BASE_URL=https://test.k6.io examples/smoke.js</code></pre>
+    </div>
+
+    <p>
+      ทุกสคริปต์อ่านค่าจากตัวแปรสภาพแวดล้อม ทำให้ไม่ต้องแก้ไฟล์เมื่อเปลี่ยนปลายทาง
+      ค่าที่รับได้คือ <code>BASE_URL</code>, <code>TARGET_PATH</code>, <code>PEAK_VUS</code>,
+      <code>BASE_VUS</code>, <code>NORMAL_VUS</code>, <code>SPIKE_VUS</code>,
+      <code>VUS</code> และ <code>HOLD</code>
+    </p>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ทำไมชื่อตัวแปรจึงเป็น TARGET_PATH ไม่ใช่ PATH</span>
+      </div>
+      <p>
+        k6 มองเห็นตัวแปรสภาพแวดล้อมทั้งหมดของเชลล์ผ่านออบเจกต์ <code>__ENV</code>
+        ดังนั้นถ้าตั้งชื่อตัวแปรว่า <code>PATH</code> มันจะชนกับตัวแปร <code>PATH</code>
+        ของระบบปฏิบัติการซึ่งมีอยู่แล้วเสมอ ค่าที่ได้จึงกลายเป็นรายการพาธของคำสั่ง
+        แทนที่จะเป็นพาธของ API ทำให้คำขอไปผิดที่และได้ 404 โดยไม่มีคำเตือนใด ๆ
+        ตัวอย่างสคริปต์จึงตั้งชื่อให้เฉพาะเจาะจงว่า <code>TARGET_PATH</code>
+        หลักปฏิบัติทั่วไปคือตั้งชื่อตัวแปรให้มีคำนำหน้าเฉพาะโปรเจกต์ เช่น <code>APP_</code> หรือ <code>LT_</code>
+      </p>
+    </div>
+
+    <h2 id="run-docker">วิธีรันแบบ Docker</h2>
+
+    <p>
+      ถ้าไม่อยากติดตั้ง k6 ในเครื่อง ให้ใช้ image ทางการ สิ่งที่ต้องระวังคือ
+      จากในคอนเทนเนอร์ <code>localhost</code> หมายถึงตัวคอนเทนเนอร์เอง ไม่ใช่เครื่องของคุณ
+      จึงต้องใช้ <code>host.docker.internal</code> แทน
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">รันด้วย Docker image ทางการ</span>
+      </div>
+      <pre><code># รันจากโฟลเดอร์ loadtest-k6
+# บน macOS และ Windows ใช้ host.docker.internal เพื่อออกมาหาเครื่องแม่
+
+docker run --rm -i grafana/k6 run \
+  -e BASE_URL=http://host.docker.internal:8080 \
+  - < examples/smoke.js
+
+# ถ้าเปิด mock server ไว้ในคอนเทนเนอร์ด้วยกัน ให้ใช้ชื่อบริการแทน
+# docker network create loadtest
+# docker run -d --name mock --network loadtest -p 8080:8080 -v "$PWD":/app -w /app node:22 node mock-server/server.mjs
+# docker run --rm -i --network loadtest grafana/k6 run -e BASE_URL=http://mock:8080 - < examples/load.js
+
+# เก็บผลลัพธ์ออกมาเป็นไฟล์บนเครื่อง
+docker run --rm -i -v "$PWD:/work" -w /work grafana/k6 run \
+  --summary-export=summary.json \
+  -e BASE_URL=http://host.docker.internal:8080 \
+  - < examples/load.js</code></pre>
+    </div>
+
+    <p>
+      บน Linux ให้เพิ่ม <code>--add-host=host.docker.internal:host-gateway</code>
+      ให้กับคำสั่ง <code>docker run</code> เพราะชื่อนี้ไม่มีมาให้โดยอัตโนมัติ
+    </p>
+
+    <h2 id="what-to-look-for">สิ่งที่ควรดูหลังรันแต่ละตัว</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>จุดที่ต้องสังเกตของสคริปต์แต่ละตัว</caption>
+        <thead>
+          <tr>
+            <th>สคริปต์</th>
+            <th class="wrap">สิ่งที่ต้องดู</th>
+            <th class="wrap">ถ้าพบสิ่งนี้ให้ทำอะไร</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">smoke.js</td>
+            <td class="wrap">check ต้องผ่าน 100% และ <code>http_req_failed</code> เป็น 0</td>
+            <td class="wrap">ถ้าไม่ผ่าน อย่ารันตัวอื่นต่อ ให้แก้สคริปต์หรือปลายทางก่อน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">load.js</td>
+            <td class="wrap">ช่วง 5 นาทีกลางที่ VU คงที่ ดูว่า p(95) แบนหรือค่อย ๆ ไต่ขึ้น</td>
+            <td class="wrap">ถ้าไต่ขึ้นเรื่อย ๆ แสดงว่ายังไม่ถึงภาวะคงตัว หรือมีคิวสะสม</td>
+          </tr>
+          <tr>
+            <td class="code-cell">stress.js</td>
+            <td class="wrap">ขั้นที่ throughput หยุดโต แต่ p(95) เริ่มพุ่ง</td>
+            <td class="wrap">บันทึกจำนวน VU ที่ขั้นก่อนหน้าจุดนั้นไว้เป็นความจุที่ยอมรับได้</td>
+          </tr>
+          <tr>
+            <td class="code-cell">spike.js</td>
+            <td class="wrap">ช่วง 3 นาทีหลังกระชาก ว่า p(95) กลับสู่ระดับเดิมหรือยัง</td>
+            <td class="wrap">ถ้ากลับไม่ทันภายในไม่กี่นาที แปลว่าระบบระบายคิวช้า</td>
+          </tr>
+          <tr>
+            <td class="code-cell">soak.js</td>
+            <td class="wrap">เทียบ p(95) ชั่วโมงแรกกับชั่วโมงสุดท้าย</td>
+            <td class="wrap">ถ้าชั่วโมงหลังสูงกว่าชัดเจน ให้สงสัยรอยรั่วหรือทรัพยากรที่ไม่ได้คืน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="downloads">ดาวน์โหลดไฟล์</h2>
+
+    <p>
+      ดาวน์โหลดไฟล์ไปวางในโปรเจกต์ของคุณได้โดยตรง ลิงก์ด้านล่างชี้ไปที่ไฟล์จริงในโฟลเดอร์
+      <code>examples/</code> ซึ่งเป็นไฟล์ชุดเดียวกับที่แสดงในหน้านี้ จึงไม่มีทางที่โค้ดบนหน้าจะไม่ตรงกับไฟล์
+    </p>
+
+    <div class="card-grid" id="download-grid"></div>
+
+    <h2 id="next-steps">ขั้นต่อไป</h2>
+
+    <ul>
+      <li>อ่านวิธีอ่านผลลัพธ์ของสคริปต์เหล่านี้ได้ที่ <a href="lessons/06-read-results.html">บทที่ 6</a></li>
+      <li>ดูว่าตัวเลข p95 กับ p99 ของผลลัพธ์ทำงานอย่างไรได้ที่ <a href="lessons/04-percentiles.html">บทที่ 4</a></li>
+      <li>คำนวณล่วงหน้าว่าจะต้องใช้ VU เท่าไรได้ที่ <a href="tools/calculator.html">เครื่องคำนวณ</a></li>
+      <li>ถ้าต้องเลือกจำนวน VU ให้เหมาะกับระบบของคุณ เริ่มจาก <a href="lessons/05-load-profiles.html">บทที่ 5</a> ซึ่งอธิบายวิธีหาแบบเป็นขั้น</li>
+    </ul>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var SCRIPTS = [
+    {
+      file: 'smoke.js',
+      title: 'smoke.js — ยืนยันความพร้อมก่อนทุกครั้ง',
+      profile: 'smoke',
+      lead: 'รันด้วย 2 VU เป็นเวลา 20 วินาที ตั้งใจให้เล็กและสั้นที่สุด ' +
+        'เพื่อจับข้อผิดพลาดพื้นฐาน เช่น URL ผิด ลืมใส่ header หรือ check ที่ไม่มีทางผ่าน ' +
+        'ก่อนจะลงทุนรันการทดสอบเต็มรูปแบบ ' +
+        'เกณฑ์ของไฟล์นี้เป็น "เพดานสุขภาพ" ไม่ใช่ SLO เพราะ smoke ตอบคำถามว่า "ทำงานไหม" ' +
+        'ส่วนเกณฑ์ SLO อยู่ใน load.js และ soak.js',
+      look: 'check ต้องผ่าน 100% และ http_req_failed ต้องเป็น 0'
+    },
+    {
+      file: 'load.js',
+      title: 'load.js — วัดที่ภาวะใช้งานตามที่คาดไว้',
+      profile: 'load',
+      lead: 'ไต่ขึ้นเป็นขั้นจาก 0 ถึง 10 VU แล้วถือไว้ 8 นาที ' +
+        'สาธิตสี่อย่างพร้อมกัน คือการไต่ขึ้น ช่วงภาวะคงตัว think time ด้วย sleep ' +
+        'และ custom metric ที่วัดเฉพาะขั้นตอนที่ต้องการ',
+      look: 'ช่วงภาวะคงตัว p(95) ควรแบน ถ้าไต่ขึ้นเรื่อย ๆ แปลว่ายังมีคิวสะสม'
+    },
+    {
+      file: 'stress.js',
+      title: 'stress.js — หาจุดอิ่มตัวและดูว่าระบบพังแบบไหน',
+      profile: 'stress',
+      lead: 'ไต่ขึ้นเป็นขั้นถึงสี่เท่าของภาวะปกติ พร้อมตั้ง abortOnFail ' +
+        'ให้หยุดอัตโนมัติเมื่ออัตราความผิดพลาดเกิน 5% เพื่อไม่ทำร้ายระบบที่กำลังพัง',
+      look: 'หาขั้นที่ throughput หยุดโตแต่ p(95) เริ่มพุ่ง นั่นคือจุดอิ่มตัว'
+    },
+    {
+      file: 'spike.js',
+      title: 'spike.js — ดูการรับภาระกระชากและการฟื้นตัว',
+      profile: 'spike',
+      lead: 'กระชากจาก 5 ขึ้นเป็น 50 VU ใน 20 วินาที ถือไว้หนึ่งนาที แล้วลดลง ' +
+        'จากนั้นเฝ้าดูอีกสามนาทีว่าค่าตอบสนองกลับสู่ระดับเดิมหรือยัง',
+      look: 'ช่วงฟื้นตัวหลังกระชาก คือส่วนที่บอกได้มากกว่าตอนกระชากเอง'
+    },
+    {
+      file: 'soak.js',
+      title: 'soak.js — หาปัญหาที่โผล่เฉพาะเมื่อเวลาผ่านไป',
+      profile: 'soak',
+      lead: 'ถือภาวะปกติต่อเนื่องหนึ่งชั่วโมงโดยปรับให้สั้นลงได้ด้วยตัวแปร HOLD ' +
+        'เพื่อหารอยรั่วหน่วยความจำ connection ที่ไม่ถูกคืน และการเสื่อมสภาพทีละน้อย',
+      look: 'เทียบ p(95) ของชั่วโมงแรกกับชั่วโมงสุดท้าย ควรใกล้เคียงกัน'
+    }
+  ];
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6.__ctx;
+    var copyButton = window.LTK6.copyButton;
+    if (!ctx) return;
+
+    var host = document.getElementById('scripts-host');
+    var stateEl = document.getElementById('load-state');
+
+    /* ปุ่มดาวน์โหลดสร้างทันทีจากรายการไฟล์ ไม่ต้องรอโหลดเนื้อหา */
+    var grid = document.getElementById('download-grid');
+    grid.innerHTML = SCRIPTS.map(function (s) {
+      return '<div class="card">' +
+        '<p class="card__meta">' +
+        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4v8.2"/><path d="M6.8 8.7L10 11.9l3.2-3.2"/><path d="M3.8 15.2v.6a1.2 1.2 0 0 0 1.2 1.2h10a1.2 1.2 0 0 0 1.2-1.2v-.6"/></svg>' +
+        esc(s.profile) + '</p>' +
+        '<h3><a href="' + ctx.root + 'examples/' + s.file + '" download>' + esc(s.file) + '</a></h3>' +
+        '<p>' + esc(s.look) + '</p>' +
+        '<p><a class="card__link" href="' + ctx.root + 'examples/' + s.file +
+        '" download>ดาวน์โหลดไฟล์นี้</a></p>' +
+        '</div>';
+    }).join('');
+
+    /* อ่านเนื้อหาจริงของแต่ละไฟล์มาแสดง เพื่อให้หน้าตรงกับไฟล์เสมอ */
+    var loaders = SCRIPTS.map(function (s) {
+      return fetch(ctx.root + 'examples/' + s.file, { cache: 'no-cache' }).then(function (res) {
+        if (!res.ok) throw new Error(s.file + ' — HTTP ' + res.status);
+        return res.text().then(function (text) { return { meta: s, code: text }; });
+      });
+    });
+
+    Promise.all(loaders).then(function (items) {
+      stateEl.hidden = true;
+      var html = '';
+      items.forEach(function (item, i) {
+        var s = item.meta;
+        html += '<h2 id="script-' + s.profile + '">' + esc(s.title) + '</h2>' +
+          '<p>' + esc(s.lead) + '</p>' +
+          '<p class="muted" style="font-size:.86rem"><strong>สิ่งที่ต้องดู:</strong> ' + esc(s.look) + '</p>' +
+          '<div class="code-block" data-script="' + i + '">' +
+          '<div class="code-block__head">' +
+          '<span class="code-block__title">examples/' + esc(s.file) + '</span>' +
+          '</div>' +
+          '<pre><code>' + esc(item.code) + '</code></pre>' +
+          '</div>';
+      });
+      host.innerHTML = html;
+
+      /* ใส่ปุ่มคัดลอกให้แต่ละบล็อก โดยใช้ข้อความจริงที่อ่านมา */
+      Array.prototype.forEach.call(host.querySelectorAll('.code-block'), function (block) {
+        var idx = Number(block.getAttribute('data-script'));
+        var pre = block.querySelector('pre');
+        var head = block.querySelector('.code-block__head');
+        if (!copyButton || !head || head.querySelector('.copy-btn')) return;
+        head.appendChild(copyButton(function () {
+          return items[idx].code;
+        }, 'คัดลอกโค้ด'));
+        void pre;
+      });
+
+      /* แจ้งสารบัญให้สร้างใหม่ เพราะมีหัวข้อใหม่เพิ่มเข้ามาหลังโหลดเสร็จ */
+      document.dispatchEvent(new CustomEvent('ltk6:toc-refresh'));
+
+    }).catch(function (err) {
+      stateEl.className = 'callout callout--warn';
+      stateEl.innerHTML =
+        '<div class="callout__head">' +
+        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>' +
+        '<span class="label">อ่านไฟล์สคริปต์ไม่สำเร็จ</span></div>' +
+        '<p>' + esc(err.message) + '</p>' +
+        '<p><strong>วิธีแก้:</strong> หน้านี้ต้องเปิดผ่านเว็บเซิร์ฟเวอร์ ไม่ใช่เปิดไฟล์ตรง ๆ ด้วย file:// ' +
+        'ให้รัน <code>python3 -m http.server</code> ในโฟลเดอร์ site แล้วเปิดผ่าน http://localhost ' +
+        'หรือดาวน์โหลดไฟล์ได้โดยตรงจากโฟลเดอร์ <code>examples/</code> ซึ่งอยู่ในโปรเจกต์นี้</p>';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บทที่ 2 — VU ทำงานอย่างไร | Load Testing ด้วย k6</title>
+<meta name="description" content="อธิบาย virtual user ของ k6 อย่างละเอียด ตั้งแต่ lifecycle, init context, ความต่างของ executor แต่ละแบบ ไปจนถึงเหตุผลที่เพิ่ม VU แล้ว throughput ไม่เพิ่ม">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="02-vu" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูนำทางและสารบัญในหน้านี้สร้างด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งาน
+    เนื้อหาบทเรียนยังอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M10 3.6l6.2 3.2-6.2 3.2L3.8 6.8z"/><path d="M3.8 10.4L10 13.6l6.2-3.2"/><path d="M3.8 13.6L10 16.8l6.2-3.2"/></svg>
+      บทที่ 2 จาก 6
+    </p>
+
+    <h1>virtual user คืออะไร และทำไมมันไม่ใช่เบราว์เซอร์จำลอง</h1>
+
+    <p class="lede">
+      VU ไม่ใช่เบราว์เซอร์ที่เปิดขึ้นมาทีละตัว แต่เป็นหน่วยทำงานที่ยิงคำขอ HTTP แล้วรอคำตอบ
+      ความเข้าใจผิดนี้ทำให้ตั้งจำนวน VU น้อยกว่าที่ควร
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ใช้เวลาอ่านประมาณ 16 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ต้องอ่านก่อน: <a href="01-tps.html">บทที่ 1</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 4.4h11.2L10 10l5.6 5.6H4.4"/></svg>
+        ตัวอย่างจริง: <a href="../examples.html">สคริปต์ 5 แบบ</a>
+      </div>
+    </div>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>VU มี <code>default()</code> ที่รันซ้ำเป็นลูป พร้อม JS runtime และ cookie jar ของตัวเอง ไม่ใช่เบราว์เซอร์จำลอง</li>
+        <li>VU ถูกจองไว้ตลอดเวลาที่รอคำตอบ งานที่ลอยพร้อมกันจึงเท่ากับ throughput คูณ latency</li>
+        <li>ตัวแปรในบริบท <code>init</code> อยู่ตลอดอายุ VU ส่วนตัวแปรใน <code>default()</code> เริ่มใหม่ทุกรอบ</li>
+        <li>หลังจุดอิ่มตัว การเพิ่ม VU ทำให้เวลาต่อรอบยาวขึ้น แต่ throughput ไม่เพิ่ม</li>
+      </ol>
+    </div>
+
+    <h2 id="what-is-vu">VU คือหน่วยทำงาน ไม่ใช่เบราว์เซอร์</h2>
+
+    <p>
+      k6 ที่ตั้ง 10 VU จะสร้างหน่วยทำงาน 10 หน่วย แต่ละหน่วยมี goroutine ของภาษา Go
+      และ JavaScript runtime ของตัวเอง แล้วรัน <code>default()</code> ซ้ำเป็นลูป
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>สิ่งที่ VU ของ k6 ทำได้และทำไม่ได้</caption>
+        <thead>
+          <tr>
+            <th class="wrap">ความสามารถ</th>
+            <th class="wrap">VU ของ k6</th>
+            <th class="wrap">เบราว์เซอร์จริง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">ส่งคำขอ HTTP และรับคำตอบ</td>
+            <td class="wrap">ทำได้</td>
+            <td class="wrap">ทำได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">รัน JavaScript ที่อยู่ในสคริปต์ทดสอบ</td>
+            <td class="wrap">ทำได้</td>
+            <td class="wrap">ทำได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">รัน JavaScript ของหน้าเว็บที่ทดสอบ</td>
+            <td class="wrap">ทำไม่ได้</td>
+            <td class="wrap">ทำได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">ดาวน์โหลดและจัดวาง CSS ให้เห็นหน้าตา</td>
+            <td class="wrap">ทำไม่ได้</td>
+            <td class="wrap">ทำได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">วัดเวลาเรนเดอร์ที่ผู้ใช้เห็นจริง</td>
+            <td class="wrap">ทำไม่ได้</td>
+            <td class="wrap">ทำได้</td>
+          </tr>
+          <tr>
+            <td class="wrap">ข้อจำกัดด้านจำนวนที่เปิดพร้อมกัน</td>
+            <td class="wrap">หลักพันถึงหลักหมื่น ขึ้นกับหน่วยความจำ</td>
+            <td class="wrap">หลักสิบถึงหลักร้อยก่อนเครื่องจะเต็ม</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ตารางนี้เปรียบเทียบเชิงคุณลักษณะของสองเครื่องมือ
+      ตัวเลขช่วงในแถวสุดท้ายเป็นค่าประมาณเพื่อการวางแผน ค่าที่วัดได้จริงคือ
+      <code>vus: 10</code> และ <code>vus_max: 10</code>
+    </p>
+
+    <p>
+      VU วัดชั้น HTTP ไม่ได้วัดประสบการณ์ผู้ใช้จริง ถ้าหน้าจองตั๋วใช้ JavaScript
+      ฝั่งเบราว์เซอร์ทำงานหนัก <span class="key-figure">1.5</span> วินาทีหลังได้ข้อมูลมา
+      k6 จะไม่เห็นเวลานั้นเลย ต้องใช้ Playwright หรือ k6 browser module
+    </p>
+
+    <p class="keypoint">
+      VU ถูกจองไว้จนงานที่รับมาทำจนจบ ตัวเลขที่วัดได้จึงเป็นเวลาของชั้น HTTP ไม่ใช่เวลาที่ผู้ใช้รอ
+    </p>
+
+    <h2 id="lifecycle">วงจรชีวิตของ VU</h2>
+
+    <ol class="steps">
+      <li>
+        <strong>k6 อ่านและรันโค้ดระดับโมดูลหนึ่งครั้งต่อ VU</strong>
+        ส่วนนี้เรียกว่าบริบท <code>init</code> ครอบคลุมทุกอย่างที่เขียนไว้นอกฟังก์ชัน
+        รวมถึงการเรียกใช้ฟังก์ชันเพื่อเตรียมข้อมูล ตัวแปรที่สร้างตรงนี้จะเป็นของ VU ตัวนั้น
+      </li>
+      <li>
+        <strong>VU เข้าสู่ฟังก์ชัน <code>default()</code></strong>
+        ซึ่งเป็นจุดที่ k6 ใช้เป็น "หนึ่งรอบการทำงาน" หนึ่งรอบอาจยิงคำขอเดียวหรือหลายคำขอ
+      </li>
+      <li>
+        <strong>VU รอคำตอบ</strong> ในช่วงนี้ VU ถูกจองไว้ ทำงานอย่างอื่นไม่ได้เลย
+        นี่คือหัวใจของคำอธิบายเรื่อง saturation ที่จะกล่าวถึงข้างล่าง
+      </li>
+      <li>
+        <strong>VU ทำงานที่เหลือในรอบจนจบ</strong> เช่นการตรวจผลด้วย <code>check()</code>
+        การเขียนค่าเข้า custom metric และการเรียก <code>sleep()</code> เพื่อให้ think time
+      </li>
+      <li>
+        <strong>กลับไปเริ่มรอบใหม่ทันที</strong> ไม่มีการหยุดพักระหว่างรอบนอกจากที่เราสั่งไว้เอง
+        แล้ววนซ้ำจนกว่าจะครบจำนวนรอบหรือหมดเวลาตามที่ executor กำหนด
+      </li>
+    </ol>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">state และ cookie แยกกันทุก VU</span>
+      </div>
+      <p>
+        ตัวแปรที่สร้างใน <code>default()</code> จะเริ่มใหม่ทุกครั้งที่มีการรัน ไม่ค้างข้ามรอบ
+        ส่วนตัวแปรที่สร้างในบริบท <code>init</code> จะอยู่ตลอดอายุของ VU นั้น
+        และไม่ถูกแชร์ให้ VU อื่น เพราะแต่ละ VU มี JavaScript runtime ของตัวเอง
+        cookies ก็เช่นกัน แต่ละ VU มี cookie jar ของตัวเอง จึงเลียนแบบผู้ใช้คนละคนได้
+        โดยไม่ต้องเขียนโค้ดจัดการอะไรเพิ่ม
+      </p>
+    </div>
+
+    <h2 id="executors">เลือก executor ให้ตรงกับคำถาม</h2>
+
+    <p>
+      executor กำหนดว่า k6 สร้างภาระงานอย่างไร แบ่งเป็นสองตระกูล คือกำหนดจากจำนวนรอบ
+      กับกำหนดจากอัตราการมาถึงของงาน
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>executor ที่ใช้บ่อยและความหมายที่แท้จริง</caption>
+        <thead>
+          <tr>
+            <th>executor</th>
+            <th class="wrap">กำหนดอะไร</th>
+            <th class="wrap">พฤติกรรมเมื่อระบบช้าลง</th>
+            <th class="wrap">เหมาะกับ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">shared-iterations</td>
+            <td class="wrap">โควตารวมของทุกรอบ โดยทุก VU แย่งกันทำ</td>
+            <td class="wrap">VU ที่เร็วทำมากกว่า จำนวนรอบรวมไม่เปลี่ยน</td>
+            <td class="wrap">งานที่ต้องแปรรูปข้อมูลเป็นชุด เช่นยิง 10,000 รายการให้จบ</td>
+          </tr>
+          <tr>
+            <td class="code-cell">per-vu-iterations</td>
+            <td class="wrap">แต่ละ VU ต้องทำครบตามจำนวนที่กำหนด</td>
+            <td class="wrap">รอบรวมเท่ากับ VU × จำนวนรอบเสมอ</td>
+            <td class="wrap">ต้องการให้ทุก VU ได้ทำงานเท่ากันจริง</td>
+          </tr>
+          <tr>
+            <td class="code-cell">constant-vus</td>
+            <td class="wrap">จำนวน VU คงที่ตามเวลา</td>
+            <td class="wrap">รอบต่อวินาทีลดลงเอง ตามแบบจำลองปิด</td>
+            <td class="wrap">ทดสอบที่ภาวะคงตัวและต้องการเทียบก่อน-หลัง</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">ramping-vus</td>
+            <td class="wrap">จำนวน VU เปลี่ยนตาม stages ที่กำหนด</td>
+            <td class="wrap">รอบต่อวินาทีลดลงเอง</td>
+            <td class="wrap">load, stress, spike, soak — รูปแบบที่ใช้บ่อยที่สุด</td>
+          </tr>
+          <tr>
+            <td class="code-cell">constant-arrival-rate</td>
+            <td class="wrap">จำนวนงานใหม่ต่อวินาที คงที่</td>
+            <td class="wrap">อัตราคงเดิม แต่ต้องใช้ VU มากขึ้น หรือทิ้งรอบถ้า VU ไม่พอ</td>
+            <td class="wrap">เลียนแบบทราฟฟิกจากภายนอกที่ไม่สนใจว่าเราพร้อมไหม</td>
+          </tr>
+          <tr>
+            <td class="code-cell">ramping-arrival-rate</td>
+            <td class="wrap">อัตราการมาถึงของงานเปลี่ยนตาม stages</td>
+            <td class="wrap">เช่นเดียวกัน แต่ปรับอัตราได้ตามเวลา</td>
+            <td class="wrap">ทดสอบภาระสูงสุดที่คาดว่าจะเจอในอนาคต</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      ramping-vus เป็นแบบจำลองปิด จึงยิงช้าลงเองเมื่อระบบช้าลง ไม่ตรงกับทราฟฟิกภายนอก
+      ที่ไม่สนใจว่าเราพร้อมไหม
+    </p>
+
+    <h2 id="blocking">VU ว่างงานตอนรอ และนั่นสำคัญมาก</h2>
+
+    <p>
+      ถ้าแต่ละคำขอใช้เวลา 100 ms และต้องการ 100 request/s ต้องมีงานลอยพร้อมกันอย่างน้อย 10 งาน
+      หรือ VU 10 ตัวเมื่อไม่มี think time เพราะ VU ที่รอคำตอบถูกจองไว้กับงานนั้นจนจบ
+      จึงเป็นไปตาม <code>throughput = concurrency ÷ latency</code>
+    </p>
+
+    <div class="working">
+      <span class="w-line w-label">จากบทที่ 1 — เทียบกับผลที่วัดได้จริง</span>
+      <span class="w-line">request ที่ลอยพร้อมกัน = 93.44 × 0.05425 = 5.07</span>
+      <span class="w-line">VU ทั้งหมดที่ใช้       = 10</span>
+      <span class="w-line w-result">สัดส่วนเวลาที่ VU ถูกจองโดยการรอคำตอบ = 5.07 ÷ 10 = 50.7%</span>
+    </div>
+
+    <p>
+      ตัวเลข <span class="key-figure">50.7%</span> หมายความว่า VU ครึ่งหนึ่งกำลังนอนรอ think time
+      ถ้าลด <code>sleep()</code> ลงครึ่งหนึ่ง throughput จะเพิ่มแต่ latency จะแย่ลง
+    </p>
+
+    <h3 id="think-time-effect">think time ทำให้ TPS ต่อ VU ลดลงอย่างไร</h3>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>กำลังผลิตต่อ VU เมื่อ Rt = 54.25 ms (ค่าจริงจากการรัน) และเปลี่ยน think time</caption>
+        <thead>
+          <tr>
+            <th class="num">think time (ms)</th>
+            <th class="num">iteration_duration (ms)</th>
+            <th class="num">TPS ต่อ 1 VU</th>
+            <th class="num">10 VUs ให้ TPS</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">0</td><td class="num">54.25</td><td class="num">18.43</td><td class="num">184.33</td>
+          </tr>
+          <tr class="row-signal">
+            <td class="num">50</td><td class="num">104.25</td><td class="num">9.59</td><td class="num">95.92</td>
+          </tr>
+          <tr>
+            <td class="num">500</td><td class="num">554.25</td><td class="num">1.80</td><td class="num">18.04</td>
+          </tr>
+          <tr>
+            <td class="num">1000</td><td class="num">1054.25</td><td class="num">0.95</td><td class="num">9.49</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      แถวที่ไฮไลต์คือค่าที่สคริปต์ตั้งไว้จริง ให้ <span class="key-figure">95.92</span> request/s ทางทฤษฎี
+      ขณะที่ k6 รายงาน <span class="key-figure">93.44</span> request/s ส่วนต่าง 2.6% มาจากเวลาที่
+      VU ทำงานจริง <span class="key-figure">98.5%</span> และค่าใช้จ่ายเบ็ดเตล็ดอื่น
+    </p>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> คอลัมน์ Rt ใช้ค่า <span class="key-figure">54.25</span> ms ค่าเฉลี่ยจริงจาก
+      <code>http_req_duration</code> ในการรัน k6 v2.2.0 (10 VUs, 12 s) คอลัมน์อื่นคำนวณจากสูตร
+      closed model จึงเป็นการเปรียบเทียบ มีแถว think time 50 ms เทียบกับ 93.44 request/s ที่ k6 รายงาน
+    </p>
+
+    <h2 id="connection">VU กับ connection pool ไม่ใช่เรื่องเดียวกัน</h2>
+
+    <p>
+      จำนวน VU ไม่เท่ากับจำนวน connection ที่เปิดคู่กับเซิร์ฟเวอร์ k6 ใช้ keep-alive
+      จึงนำ connection เดิมกลับมาใช้ซ้ำ
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เวลาที่ใช้เปิด connection ใหม่ เทียบกับเวลารวมต่อคำขอ (จากข้อมูลจริง)</caption>
+        <thead>
+          <tr>
+            <th>metric</th>
+            <th class="num">avg (ms)</th>
+            <th class="num">p95 (ms)</th>
+            <th class="num">max (ms)</th>
+            <th class="wrap">ตีความ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">http_req_blocked</td>
+            <td class="num">0.02</td><td class="num">0.02</td><td class="num">2.82</td>
+            <td class="wrap">แทบไม่มีคิวรอ connection</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_connecting</td>
+            <td class="num">0.01</td><td class="num">0.00</td><td class="num">1.30</td>
+            <td class="wrap">ค่า p95 เป็น 0 แปลว่าเกือบทุกคำขอไม่ต้องเชื่อมต่อใหม่</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">http_req_duration</td>
+            <td class="num">54.25</td><td class="num">74.53</td><td class="num">584.70</td>
+            <td class="wrap">ตัวหารที่ใช้เทียบสัดส่วน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      ค่า <code>connecting</code> ที่ p95 เป็น 0 บอกว่า 95% ของคำขอใช้ connection เดิม
+      ค่า max 1.30 ms จึงเป็นส่วนน้อยที่ต้องเปิดใหม่
+    </p>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ตัวเลขที่ "ดีเกินจริง" เพราะ keep-alive</span>
+      </div>
+      <p>
+        ผู้ใช้จริงที่เพิ่งเปิดเบราว์เซอร์ครั้งแรกต้องจ่ายค่าเชื่อมต่อเต็มจำนวน
+        การทดสอบที่ใช้ connection ซ้ำจึงให้ตัวเลขที่ดีกว่าประสบการณ์ผู้ใช้กลุ่มนี้
+        ให้ลองรันด้วย <code>--no-connection-reuse</code> เพื่อดูว่าผลต่างกันเท่าไร
+        ถ้าต่างกันมาก แปลว่าค่า handshake มีนัยสำคัญ และควรคำนึงถึงเมื่อวางแผนรับมือทราฟฟิกก้อนใหม่
+      </p>
+    </div>
+
+    <p>
+      เมื่อต้องยิงหลายคำขอพร้อมกันในหนึ่งรอบ ใช้ <code>http.batch()</code>
+      ซึ่งยิงหลายรายการพร้อมกันจาก VU ตัวเดียว
+    </p>
+
+    <h2 id="ramp-up">ทำไมต้องค่อย ๆ เพิ่ม VU</h2>
+
+    <ol>
+      <li>
+        <strong>ระบบยังไม่อุ่นเครื่อง</strong> ช่วงต้นมีค่าใช้จ่ายจากการคอมไพล์โค้ด
+        การเติม cache และการเปิด connection ซึ่งจะปนเข้าไปในผลถ้าเปิดเต็มที่ทันที
+      </li>
+      <li>
+        <strong>เกิดภาระกระชากที่ไม่มีอยู่จริง</strong> VU 100 ตัวยิงคำขอแรกพร้อมกันในเสี้ยววินาทีเดียว
+        สร้างคิวประดิษฐ์ที่บิดเบือนค่า p95 กับ p99
+      </li>
+      <li>
+        <strong>หาไม่เจอว่าจุดอิ่มตัวอยู่ตรงไหน</strong> การไต่ขึ้นทีละขั้นทำให้เห็นว่าที่จำนวน VU เท่าไร
+        throughput เริ่มหยุดโต ถ้าเปิดเต็มที่ทันทีจะรู้แค่ผลลัพธ์สุดท้าย
+      </li>
+    </ol>
+
+    <h2 id="saturation">เพิ่ม VU แล้ว throughput ไม่เพิ่ม เพราะอะไร</h2>
+
+    <p>
+      กฎของ Little ในรูป <code>throughput = concurrency ÷ latency</code> ตอบคำถามนี้
+      เมื่อถึงจุดอิ่มตัว ทรัพยากรบางอย่างเต็ม เช่นเธรดของเว็บเซิร์ฟเวอร์ งานที่เพิ่มมาจึงต้องต่อคิว
+      เวลาต่อรอบยาวขึ้นตามคิว
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>แบบจำลองเชิงแนวคิด: เมื่อเพิ่ม VU เกินจุดอิ่มตัว เกิดอะไรกับตัวเลข</caption>
+        <thead>
+          <tr>
+            <th class="num">VUs</th>
+            <th class="num">งานที่ทำพร้อมกันได้จริง</th>
+            <th class="num">เวลาต่อรอบ (ms)</th>
+            <th class="num">throughput</th>
+            <th class="wrap">อาการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">10</td><td class="num">10</td><td class="num">100</td><td class="num">100</td>
+            <td class="wrap">ยังมีกำลังเหลือ เพิ่ม VU ได้อีก</td>
+          </tr>
+          <tr>
+            <td class="num">20</td><td class="num">20</td><td class="num">100</td><td class="num">200</td>
+            <td class="wrap">throughput โตเป็นสัดส่วน ยังไม่ถึงจุดอิ่มตัว</td>
+          </tr>
+          <tr class="row-signal">
+            <td class="num">40</td><td class="num">40</td><td class="num">125</td><td class="num">320</td>
+            <td class="wrap">จุดอิ่มตัว: throughput โตช้าลงแล้ว เวลาต่อรอบเริ่มยาว</td>
+          </tr>
+          <tr>
+            <td class="num">80</td><td class="num">40</td><td class="num">250</td><td class="num">320</td>
+            <td class="wrap">เพิ่ม VU อีกเท่าตัวแต่ throughput เท่าเดิม latency แย่ลงสองเท่า</td>
+          </tr>
+          <tr>
+            <td class="num">160</td><td class="num">40</td><td class="num">600</td><td class="num">267</td>
+            <td class="wrap">เลยจุดรับไหว: throughput เริ่มลดลงเพราะมีงานเสียเปล่า</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ตารางนี้เป็นตัวอย่างการคำนวณจากสมการ
+      <code>throughput = concurrency ÷ latency</code> โดยสมมติว่าระบบรองรับงานพร้อมกันได้ 40 งาน
+      ไม่ใช่ผลการวัด ตัวเลขจริงหาได้จาก breakpoint test ตามบทที่ 5
+    </p>
+
+    <h3 id="saturation-signs">สัญญาณว่ากำลังอยู่ในภาวะอิ่มตัว</h3>
+
+    <ul>
+      <li>เพิ่ม VU แล้ว <code>http_reqs</code> ต่อวินาทีไม่ขยับ แต่ <code>http_req_duration</code> เพิ่มขึ้นเป็นสัดส่วน</li>
+      <li><code>http_req_waiting</code> เพิ่มขึ้น ขณะที่ <code>blocked</code> และ <code>connecting</code> ยังเท่าเดิม → คอขวดอยู่ที่เซิร์ฟเวอร์</li>
+      <li>อัตราความผิดพลาดเริ่มสูงขึ้น โดยเฉพาะสถานะ 429 หรือ 503</li>
+      <li><code>dropped_iterations</code> มากกว่า 0 → คอขวดอยู่ที่เครื่องทดสอบ ไม่ใช่ที่เซิร์ฟเวอร์</li>
+    </ul>
+
+    <h2 id="cost">ต้นทุนของ VU หนึ่งตัว</h2>
+
+    <p>
+      VU เบากว่าเบราว์เซอร์มาก แต่ไม่ได้ฟรี หน่วยความจำต่อ VU ขึ้นกับข้อมูลที่โหลดไว้ใน
+      <code>init</code> ถ้าอ่านไฟล์ทดสอบขนาด 50 MB เก็บในตัวแปรระดับโมดูล ทุก VU ถือสำเนาคนละชุด
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ค่าประมาณเชิงขนานสำหรับวางแผน ไม่ใช่ผลการวัดในบทเรียนนี้</caption>
+        <thead>
+          <tr>
+            <th class="wrap">สิ่งที่เทียบ</th>
+            <th class="wrap">หน่วยความจำต่อหน่วย</th>
+            <th class="wrap">จำนวนที่เครื่องทั่วไปรับได้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>VU ของ k6 (สคริปต์เบา)</td>
+            <td class="wrap">หลักร้อยกิโลไบต์ถึงหลักเมกะไบต์</td>
+            <td class="wrap">หลักพันขึ้นไป</td>
+          </tr>
+          <tr>
+            <td>VU ของ k6 (โหลดข้อมูลก้อนใหญ่ใน init)</td>
+            <td class="wrap">บวกตามขนาดข้อมูลที่โหลดไว้</td>
+            <td class="wrap">ลดลงตามขนาดข้อมูล</td>
+          </tr>
+          <tr>
+            <td>เบราว์เซอร์จริงหนึ่งหน้าต่าง</td>
+            <td class="wrap">หลักสิบถึงหลักร้อยเมกะไบต์</td>
+            <td class="wrap">หลักสิบก่อนเครื่องเริ่มหน่วง</td>
+          </tr>
+          <tr>
+            <td>เธรดของระบบปฏิบัติการหนึ่งเธรด</td>
+            <td class="wrap">หลักเมกะไบต์ต่อสแตก</td>
+            <td class="wrap">หลักพัน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ตัวเลขในตารางนี้เป็นค่าประมาณเชิงขนาด
+      ตัวเลขจริงขึ้นกับสคริปต์และเครื่อง การรันในบทเรียนนี้ใช้ VU เพียง 10 ตัว จึงไม่มีข้อมูล
+      หน่วยความจำ ให้วัดจาก <code>docker stats</code> แทน
+    </p>
+
+    <h2 id="examples">ตัวอย่าง options ที่ใช้บ่อย</h2>
+
+    <p>
+      ตัวอย่างแรกคือ ramping-vus
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">options แบบ ramping-vus (closed model)</span>
+      </div>
+      <pre><code>export const options = {
+  scenarios: {
+    load: {
+      executor: 'ramping-vus',
+      startVUs: 0,                 // เริ่มจากศูนย์เพื่อให้มีการไต่ขึ้นจริง
+      stages: [
+        { duration: '1m', target: 3 },   // อุ่นเครื่อง: เติม cache และเปิด connection
+        { duration: '2m', target: 6 },   // ไต่ขึ้น
+        { duration: '5m', target: 10 },  // steady state — ช่วงที่ข้อมูลมีความหมาย
+        { duration: '3m', target: 10 },  // ถือภาวะเดิมต่อเพื่อดูว่าเสถียรไหม
+        { duration: '1m', target: 0 },   // ผ่อนลง ให้คำขอที่ค้างอยู่ทำงานจนจบ
+      ],
+      gracefulRampDown: '30s',     // เวลาที่ให้รอบที่ค้างอยู่ทำจนเสร็จก่อนบังคับหยุด
+    },
+  },
+  thresholds: {
+    http_req_duration: ['p(95)<500'],  // p95 ไม่เกิน 500 ms
+    http_req_failed: ['rate<0.01'],    // ความผิดพลาดต่ำกว่า 1%
+  },
+};</code></pre>
+    </div>
+
+    <p>
+      ตัวอย่างที่สองคือ constant-arrival-rate ต้องกำหนด <code>maxVUs</code> เสมอ
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">options แบบ constant-arrival-rate (open model)</span>
+      </div>
+      <pre><code>export const options = {
+  scenarios: {
+    steady_traffic: {
+      executor: 'constant-arrival-rate',
+      rate: 100,                   // ต้องเริ่ม 100 รอบใหม่ทุกวินาที
+      timeUnit: '1s',              // หน่วยเวลาของ rate
+      duration: '10m',             // ระยะเวลาที่จะสร้างภาระ
+      preAllocatedVUs: 20,         // VU ที่จองไว้ล่วงหน้า
+      maxVUs: 200,                 // เพดานที่ยอมให้ขยายได้ถ้างานค้าง
+      // ถ้า maxVUs ไม่พอ k6 จะทิ้งรอบและนับใน dropped_iterations
+      // ซึ่งแปลว่าโหลดที่สร้างได้จริงต่ำกว่าแผน ต้องแก้ก่อนตีความผล
+    },
+  },
+  thresholds: {
+    http_req_duration: ['p(95)<500'],
+    http_req_failed: ['rate<0.01'],
+    dropped_iterations: ['count<1'],   // ต้องไม่มีรอบใดถูกทิ้งเลย
+  },
+};</code></pre>
+    </div>
+
+    <p>
+      แบบจำลองเปิดใช้ <code>http_req_duration</code> เป็นเกณฑ์ได้ตรงกว่า เพราะอัตราการยิงถูกตรึงไว้
+      ส่วนแบบจำลองปิด ตัวเลข throughput กับ latency ขึ้นแก่กัน ต้องอ่านพร้อมกัน
+    </p>
+
+    <h2 id="summary">สรุปบทที่ 2</h2>
+
+    <ul>
+      <li>ramping-vus ใช้ทดสอบตามเวลา arrival-rate เลียนแบบทราฟฟิกภายนอก ต้องมี ramp-up เสมอ</li>
+      <li>หลังจุดอิ่มตัว เพิ่ม VU ทำให้ latency แย่ลงโดยที่ throughput ไม่เพิ่ม</li>
+    </ul>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/site.js"></script>
+
+</body>
+</html>

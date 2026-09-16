@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บทที่ 3 — แคตตาล็อก metric ของ k6 | Load Testing ด้วย k6</title>
+<meta name="description" content="รายการ metric ทั้งหมดที่ k6 รายงาน พร้อมชนิด หน่วย วิธีตีความ และเกณฑ์ที่ควรกังวล รวมถึงวิธีแยกว่าปัญหาอยู่ฝั่งเซิร์ฟเวอร์หรือฝั่งเครือข่าย">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="03-metrics" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    ต้องเปิด JavaScript เพื่อดูเมนูและตาราง metric ของหน้านี้
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+      บทที่ 3 จาก 6
+    </p>
+
+    <h1>แคตตาล็อก metric — อ่านให้ออกว่าเวลาหายไปไหน</h1>
+
+    <p class="lede">
+      k6 รายงาน sub-metric ที่แยกเวลาของคำขอออกเป็นส่วน ๆ จึงตอบได้ว่าปัญหาอยู่ที่
+      เซิร์ฟเวอร์ เครือข่าย หรือเครื่องทดสอบ
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ใช้เวลาอ่านประมาณ 20 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ต้องอ่านก่อน: <a href="01-tps.html">บทที่ 1</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+        อ่านคู่กับ: <a href="../glossary.html">อภิธานศัพท์</a>
+      </div>
+    </div>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>metric มีสี่ชนิด Counter, Gauge, Rate, Trend และ Gauge อย่าง <code>vus</code> ห้ามบวกกัน ให้อ่านเป็น min/max/avg</li>
+        <li><code>http_req_duration</code> = sending + waiting + receiving ส่วน <code>blocked</code>, <code>connecting</code> และ <code>tls_handshaking</code> ถูกวัดแยกออกมานอก duration</li>
+        <li>ในการรันนี้ <code>waiting</code> กิน 99.58% ของ duration คอขวดจึงอยู่ที่เซิร์ฟเวอร์</li>
+        <li>ผลของ check ไม่ทำให้การรันล้มเหลวถ้าไม่มี threshold คุม และ expected_response ทำให้ <code>http_req_failed</code> ไม่เตือน 4xx</li>
+      </ol>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">ข้อมูลชุดเดียวกับหน้าอภิธานศัพท์</span>
+      </div>
+      <p>
+        คำอธิบาย metric ทุกตัวในหน้านี้ และคำศัพท์ในหน้า
+        <a href="../glossary.html">อภิธานศัพท์</a> อ่านมาจากไฟล์ข้อมูลไฟล์เดียวกันคือ
+        <code>assets/data/metrics.json</code> จึงไม่มีทางที่คำอธิบายจะขัดกันเองระหว่างสองหน้า
+        ถ้าแก้คำอธิบายที่ไฟล์นั้น ทั้งสองหน้าจะเปลี่ยนตามพร้อมกัน
+      </p>
+    </div>
+
+    <h2 id="types">ชนิดของ metric และสิ่งที่บอกได้</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>metric สี่ชนิดของ k6 และวิธีอ่านค่าที่ถูกต้อง</caption>
+        <thead>
+          <tr>
+            <th>ชนิด</th>
+            <th class="wrap">ค่าที่เก็บ</th>
+            <th class="wrap">วิธีอ่านที่ถูก</th>
+            <th class="wrap">ตัวอย่าง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">Counter</td>
+            <td class="wrap">ยอดสะสม เพิ่มอย่างเดียว ลดไม่ได้</td>
+            <td class="wrap">อ่านผลรวม และดูอัตราต่อวินาทีที่ k6 คำนวณให้</td>
+            <td class="wrap"><code>http_reqs</code>, <code>iterations</code>, <code>data_sent</code>, <code>dropped_iterations</code></td>
+          </tr>
+          <tr>
+            <td class="code-cell">Gauge</td>
+            <td class="wrap">ค่าขณะใดขณะหนึ่ง ขึ้นลงได้</td>
+            <td class="wrap">อ่านเป็น min/max/avg ของค่าที่วัดได้ ไม่ใช่ผลรวม</td>
+            <td class="wrap"><code>vus</code>, <code>vus_max</code></td>
+          </tr>
+          <tr>
+            <td class="code-cell">Rate</td>
+            <td class="wrap">สัดส่วนของเหตุการณ์ที่เกิดขึ้น</td>
+            <td class="wrap">อ่านเป็นเปอร์เซ็นต์ โดยค่าอยู่ระหว่าง 0 กับ 1</td>
+            <td class="wrap"><code>http_req_failed</code>, <code>checks</code></td>
+          </tr>
+          <tr>
+            <td class="code-cell">Trend</td>
+            <td class="wrap">การกระจายของค่าที่วัดได้</td>
+            <td class="wrap">อ่านเป็นชุดค่าสถิติ ต้องดูลึกกว่าแค่ค่าเฉลี่ย</td>
+            <td class="wrap"><code>http_req_duration</code>, <code>iteration_duration</code>, <code>http_req_waiting</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ข้อผิดพลาดที่พบบ่อยกับ Gauge</span>
+      </div>
+      <p>
+        <code>vus</code> เป็น Gauge จึงไม่มีความหมายถ้าจะนำมาบวกกัน
+        ในการรันของเรา k6 เก็บค่า <code>vus</code> ไว้ 12 ตัวอย่าง แต่ละตัวมีค่า 10
+        ผลรวมคือ 120 ซึ่งไม่มีความหมายอะไร ส่วนที่ควรอ่านคือ <code>avg 10, min 10, max 10</code>
+        ซึ่งยืนยันว่าจำนวน VU ที่ทำงานจริงตรงกับที่ตั้งไว้ในทุกระยะของการรัน
+      </p>
+    </div>
+
+    <h2 id="catalog">แคตตาล็อก metric ทั้งหมด</h2>
+
+    <p>
+      คอลัมน์ขวาสุดคือค่าที่วัดได้จากการรัน k6 v2.2.0 ด้วย 10 VUs เป็นเวลา
+      <span class="key-figure">12 วินาที</span> ช่องว่างคือ metric ที่ไม่ได้เก็บค่า
+    </p>
+
+    <p id="catalog-status" class="muted" style="font-size:.85rem">กำลังอ่านไฟล์ข้อมูล metric</p>
+    <div id="metric-table-host" class="bleed"></div>
+
+    <h2 id="duration-identity">เวลาของหนึ่งคำขอประกอบด้วยอะไร</h2>
+
+    <div class="working">
+      <span class="w-line w-label">ส่วนที่หนึ่ง — วัดแยก ไม่ถูกรวมใน http_req_duration</span>
+      <span class="w-line">http_req_blocked         เวลารอ socket ว่างจาก pool</span>
+      <span class="w-line">http_req_connecting      เวลาเปิด TCP connection ใหม่</span>
+      <span class="w-line">http_req_tls_handshaking เวลาทำ TLS handshake</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">ส่วนที่สอง — http_req_duration คือผลรวมของสามตัวนี้</span>
+      <span class="w-line">http_req_sending   เวลาเขียน request ลง socket</span>
+      <span class="w-line">http_req_waiting   เวลารอไบต์แรกจากเซิร์ฟเวอร์ (TTFB)</span>
+      <span class="w-line">http_req_receiving เวลารับ response body ที่เหลือ</span>
+    </div>
+
+    <div class="working">
+      <span class="w-line">sending   + waiting   + receiving   = http_req_duration</span>
+      <span class="w-line">0.054 ms  + 54.02 ms  + 0.172 ms  = 54.246 ms</span>
+      <span class="w-line w-result">เทียบกับค่าเฉลี่ยที่ k6 รายงาน: 54.25 ms  ตรงกัน</span>
+      <span class="w-line"></span>
+      <span class="w-line w-label">เมื่อใช้ค่าทศนิยมเต็มจากการหารผลรวมด้วย 1,155</span>
+      <span class="w-line">0.0541 + 54.0254 + 0.1723 = 54.2518 ms</span>
+      <span class="w-line w-result">ผลรวมของทั้งสามตัว = 62,660.934 ms  ผลรวมของ duration = 62,660.934 ms</span>
+    </div>
+
+    <p>
+      บรรทัดสุดท้ายรวมค่าดิบทั้ง <span class="key-figure">1,155</span> ค่าแล้วเทียบกันตรง ๆ
+      ยืนยันว่าความสัมพันธ์นี้เป็นจริงทุกคำขอ
+    </p>
+
+    <div class="callout callout--evidence">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+        <span class="label">แล้ว blocked, connecting, tls หายไปไหน</span>
+      </div>
+      <p>
+        สามตัวนี้ไม่ได้หายไป แต่ถูกวัดแยกออกมา ถ้านำค่าเฉลี่ยมารวมด้วยจะได้
+        0.0231 + 0.0097 + 0 = 0.0328 ms ซึ่งเป็นเวลาที่ใช้ไปก่อนเริ่มส่งคำขอจริง
+        เวลารวมทั้งหมดที่เครื่องทดสอบมองเห็นจึงเป็น 54.25 + 0.03 = 54.28 ms
+        ตัวเลข 0.0328 ms นี้ยังตรงกับผลต่างระหว่างผลรวมของทุก metric กับผลรวมของ duration พอดี
+      </p>
+    </div>
+
+    <h2 id="where-time-goes">แยกให้ออก: ปัญหาอยู่ฝั่งไหน</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>สัดส่วนเวลาของแต่ละส่วน เทียบกับ http_req_duration 54.25 ms</caption>
+        <thead>
+          <tr>
+            <th>metric</th>
+            <th class="num">avg (ms)</th>
+            <th class="num">สัดส่วน</th>
+            <th class="wrap">อยู่ใน duration หรือไม่</th>
+            <th class="wrap">ถ้าค่านี้สูงผิดปกติ ให้ไปดูที่</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">http_req_waiting</td>
+            <td class="num">54.0254</td>
+            <td class="num">99.58%</td>
+            <td class="wrap">อยู่ใน</td>
+            <td class="wrap">โค้ดฝั่งเซิร์ฟเวอร์ ฐานข้อมูล หรือบริการที่ถูกเรียกต่อ — คอขวดอยู่ที่นี่</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_receiving</td>
+            <td class="num">0.1723</td>
+            <td class="num">0.32%</td>
+            <td class="wrap">อยู่ใน</td>
+            <td class="wrap">ขนาด response และการบีบอัดข้อมูล</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_sending</td>
+            <td class="num">0.0541</td>
+            <td class="num">0.10%</td>
+            <td class="wrap">อยู่ใน</td>
+            <td class="wrap">ขนาด request body และคุณภาพเครือข่ายขาออก</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">http_req_blocked</td>
+            <td class="num">0.0231</td>
+            <td class="num">0.04%</td>
+            <td class="wrap">ไม่อยู่</td>
+            <td class="wrap">จำนวน connection ที่เครื่องรัน k6 มีให้ใช้ และเพดาน file descriptor</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_connecting</td>
+            <td class="num">0.0097</td>
+            <td class="num">0.02%</td>
+            <td class="wrap">ไม่อยู่</td>
+            <td class="wrap">การปิด connection reuse โดยไม่จำเป็น หรือเครือข่ายที่คุณภาพต่ำ</td>
+          </tr>
+          <tr>
+            <td class="code-cell">http_req_tls_handshaking</td>
+            <td class="num">0.0000</td>
+            <td class="num">0.00%</td>
+            <td class="wrap">ไม่อยู่</td>
+            <td class="wrap">การตั้งค่า TLS session resumption (การรันนี้ใช้ http จึงเป็น 0)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="keypoint">
+      ในการรันนี้ <code>waiting</code> กินเวลา <span class="key-figure">99.58%</span> ของเวลาทั้งหมด
+      คอขวดอยู่ที่เซิร์ฟเวอร์ ไม่ใช่เครือข่ายหรือเครื่องทดสอบ
+    </p>
+
+    <div class="callout callout--ok">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M6.9 10.2l2.1 2.1 4.1-4.4"/></svg>
+        <span class="label">หลักคิดที่ใช้ได้ทุกครั้ง</span>
+      </div>
+      <p>
+        ถ้า <code>waiting</code> คิดเป็นสัดส่วนมากสุด ปัญหาอยู่ที่เซิร์ฟเวอร์ —
+        ถ้า <code>blocked</code> หรือ <code>connecting</code> สูง ปัญหาอยู่ที่เครื่องทดสอบหรือเครือข่าย —
+        ถ้า <code>receiving</code> สูง ปัญหาอยู่ที่ขนาดข้อมูลที่ส่งกลับ
+        ให้ดูสัดส่วนก่อนดูตัวเลขดิบ เพราะตัวเลข 54 ms ไม่ได้แปลว่าดีหรือแย่จนกว่าจะรู้ว่ามันไปอยู่ส่วนไหน
+      </p>
+    </div>
+
+    <h3 id="blocked-connecting-detail">ทำไม blocked กับ connecting ถึงเป็น 0 เกือบทั้งหมด</h3>
+
+    <p>
+      ในการรันของเรา <code>blocked</code> มีค่า p95 เท่ากับ <span class="key-figure">0.02 ms</span>
+      และ <code>connecting</code> มี p95 เท่ากับ 0 เพราะคำขอส่วนใหญ่ใช้ connection เดิม
+      เฉพาะชุดแรกของแต่ละ VU ที่เชื่อมต่อใหม่ ทั้งที่ค่าสูงสุดแตะ 2.82 ms และ 1.30 ms
+    </p>
+
+    <p>
+      ค่า max ที่สูงกว่า p95 มากเป็นธรรมชาติของ metric ที่เป็น 0 เกือบทั้งหมด
+      คำขอที่เชื่อมต่อใหม่ไปโผล่ที่ max โดยไม่ขยับ p95 จึงต้องดูค่าเฉลี่ย
+      เปอร์เซ็นไทล์ และค่าสูงสุดพร้อมกัน
+    </p>
+
+    <h2 id="custom-metrics">metric ที่สร้างเอง</h2>
+
+    <p>
+      metric มาตรฐานของ k6 ไม่รู้จักโดเมนธุรกิจ ถ้าจะวัดเวลาที่ใช้ประมวลผลออร์เดอร์
+      หรือสัดส่วนการจองที่สำเร็จ ต้องสร้าง metric เอง
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">custom metric ทั้งสี่ชนิด</span>
+      </div>
+      <pre><code>import { Counter, Gauge, Rate, Trend } from 'k6/metrics';
+
+// ตั้งชื่อให้บอกหน่วยและโดเมนของเรา เพื่อไม่ให้ชนกับ metric ของ k6
+const ordersCompleted = new Counter('orders_completed_total');
+const queueDepth      = new Gauge('worker_queue_depth');
+const orderSuccess    = new Rate('order_success_rate');
+const orderLatency    = new Trend('order_processing_time_ms', true); // true = แสดงเป็น ms
+
+export default function () {
+  const start = Date.now();
+  const res = http.post(`${BASE_URL}/api/orders`, payload);
+
+  orderLatency.add(Date.now() - start);
+  orderSuccess.add(res.status === 201);
+  if (res.status === 201) ordersCompleted.add(1);
+
+  queueDepth.add(Number(res.headers['X-Queue-Depth'] || 0));
+}</code></pre>
+    </div>
+
+    <p>
+      metric ที่สร้างซ้ำกับสิ่งที่มีอยู่ไม่ได้ข้อมูลเพิ่ม การสร้าง Trend มาวัดเวลาตอบสนอง
+      ทั้งที่ <code>http_req_duration</code> มีอยู่แล้ว ทำให้ตารางผลลัพธ์ยาวขึ้น
+      ให้สร้างเฉพาะ metric ที่มาตรฐานมองไม่เห็น
+    </p>
+
+    <h2 id="output-formats">อ่านผลแบบต่าง ๆ</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ทางออกของผลลัพธ์และสิ่งที่ได้จากแต่ละทาง</caption>
+        <thead>
+          <tr>
+            <th class="wrap">คำสั่ง</th>
+            <th class="wrap">ได้อะไร</th>
+            <th class="wrap">เหมาะกับ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">k6 run script.js</td>
+            <td class="wrap">สรุปผลท้ายการรันแบบเต็ม</td>
+            <td class="wrap">ดูผลด้วยตาระหว่างพัฒนา</td>
+          </tr>
+          <tr>
+            <td class="code-cell">--summary-mode compact</td>
+            <td class="wrap">สรุปผลที่ตัดบรรทัดส่วนเกินและบรรทัด tag ออก</td>
+            <td class="wrap">ทำให้ตรวจอัตโนมัติเปรียบเทียบผลข้ามการรันได้ง่ายขึ้น</td>
+          </tr>
+          <tr>
+            <td class="code-cell">--summary-export=result.json</td>
+            <td class="wrap">ไฟล์ JSON ของสรุปผลท้ายการรัน</td>
+            <td class="wrap">เก็บประวัติและเทียบผลระหว่างการรันแต่ละครั้ง</td>
+          </tr>
+          <tr>
+            <td class="code-cell">-o json=out.json</td>
+            <td class="wrap">ข้อมูลดิบทุกจุดที่วัดได้ พร้อม tag ครบ</td>
+            <td class="wrap">วิเคราะห์เชิงลึกรายคำขอ เช่นการกระจายตัวของ latency</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">-o csv=out.csv</td>
+            <td class="wrap">ข้อมูลดิบในรูปแบบตาราง เปิดในสเปรดชีตได้ทันที</td>
+            <td class="wrap">ทำกราฟหรือคำนวณต่อเอง — ไฟล์หลักฐานของบทเรียนนี้ได้มาด้วยวิธีนี้</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">คำสั่งที่ใช้เก็บข้อมูลดิบไว้วิเคราะห์ต่อ</span>
+      </div>
+      <pre><code># เก็บข้อมูลดิบรายคำขอออกเป็น CSV พร้อม tags ครบ
+k6 run -o csv=raw.csv script.js
+
+# เก็บสรุปผลท้ายการรันเป็น JSON เพื่อเทียบกับการรันครั้งก่อน
+k6 run --summary-export=summary.json --summary-mode compact script.js
+
+# เก็บทั้งสองแบบพร้อมกัน
+k6 run -o csv=raw.csv --summary-export=summary.json script.js</code></pre>
+    </div>
+
+    <h2 id="expected-response">แท็ก expected_response และกับดักของ 4xx</h2>
+
+    <p>
+      โดยค่าเริ่มต้น k6 ถือว่าสถานะ 4xx และ 5xx เป็นความล้มเหลว ทำให้
+      <code>http_req_failed</code> สูงขึ้น ซึ่งถูกต้องสำหรับ endpoint ที่ควรตอบ 200
+      แต่ผิดสำหรับ endpoint ที่ควรตอบ 404
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">บอก k6 ว่า 404 เป็นผลลัพธ์ที่คาดไว้</span>
+      </div>
+      <pre><code>import { check } from 'k6';
+import http from 'k6/http';
+
+export default function () {
+  const res = http.get(`${BASE_URL}/api/items/999999`, {
+    tags: { expected_response: 'true' },  // 4xx ของคำขอนี้ไม่ถูกนับเป็นความล้มเหลว
+  });
+
+  // ยังต้องตรวจด้วย check เอง เพราะ http_req_failed จะไม่เตือนให้แล้ว
+  check(res, {
+    'สินค้าที่ไม่มีต้องตอบ 404': (r) => r.status === 404,
+  });
+}</code></pre>
+    </div>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ข้อควรระวัง</span>
+      </div>
+      <p>
+        เมื่อตั้ง <code>expected_response: 'true'</code> แล้ว k6 จะไม่นับความล้มเหลวให้อีก
+        ต้องเขียน <code>check()</code> ตรวจสถานะที่คาดไว้เองเสมอ
+        ไม่อย่างนั้นการทดสอบที่ได้ผลลัพธ์ผิดทั้งหมดจะดูเหมือนผ่านไปได้ด้วยดี
+        และควรตั้ง <code>thresholds: { checks: ['rate>0.99'] }</code> กำกับไว้ด้วย
+        เพราะผลของ check ไม่ทำให้การรันล้มเหลวหากไม่มี threshold คุม
+      </p>
+    </div>
+
+    <h2 id="tags">แท็กที่ k6 ใส่มาให้แล้ว</h2>
+
+    <p>
+      k6 ติดแท็กให้ทุกจุดข้อมูล จึงกรองและแยกดูภายหลังได้
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>แท็กมาตรฐานที่ติดมากับทุกจุดข้อมูลของ HTTP request</caption>
+        <thead>
+          <tr>
+            <th>แท็ก</th>
+            <th class="wrap">ค่าที่เป็นไปได้</th>
+            <th class="wrap">ประโยชน์</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">name</td>
+            <td class="wrap">URL หรือชื่อที่เราตั้งเอง</td>
+            <td class="wrap">จัดกลุ่ม URL ที่มีรหัสแตกต่างกันให้เป็นชื่อเดียว แล้วดูค่าเฉลี่ยรวมได้</td>
+          </tr>
+          <tr>
+            <td class="code-cell">status</td>
+            <td class="wrap">รหัสสถานะ HTTP</td>
+            <td class="wrap">แยกดู latency ของคำขอที่สำเร็จกับที่ล้มเหลว</td>
+          </tr>
+          <tr>
+            <td class="code-cell">method</td>
+            <td class="wrap">GET, POST และอื่น ๆ</td>
+            <td class="wrap">ดูว่าการเขียนข้อมูลช้ากว่าการอ่านแค่ไหน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">scenario</td>
+            <td class="wrap">ชื่อ scenario ในสคริปต์</td>
+            <td class="wrap">แยกผลเมื่อรันหลาย scenario พร้อมกัน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">group</td>
+            <td class="wrap">ชื่อ group ที่ครอบอยู่</td>
+            <td class="wrap">ดูเวลาของแต่ละขั้นตอนในสคริปต์แยกจากกัน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">expected_response</td>
+            <td class="wrap">true หรือ false</td>
+            <td class="wrap">กรองเฉพาะคำขอที่ถูกนับเป็นความสำเร็จออกมาดู latency</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="summary">สรุปบทที่ 3</h2>
+
+    <ul>
+      <li>metric มีสี่ชนิด Counter, Gauge, Rate, Trend ซึ่งอ่านค่าต่างกัน</li>
+      <li><code>http_req_duration = sending + waiting + receiving</code> ตรวจกับผลรวมดิบทั้ง 1,155 ค่าแล้วได้ <span class="key-figure">62,660.934 ms</span> เท่ากัน</li>
+      <li><code>blocked</code>, <code>connecting</code> และ <code>tls_handshaking</code> ถูกวัดแยกออกมา รวมกันได้ 0.0328 ms</li>
+      <li>ดู <code>http_req_failed</code> คู่กับ <code>http_reqs</code> เพราะ throughput รวมคำขอที่ล้มเหลวไว้ด้วย</li>
+    </ul>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.2" y="2.8" width="11.6" height="14.4" rx="1.4"/><path d="M7 6.4h6M7.4 10h.01M10 10h.01M12.6 10h.01M7.4 13h.01M10 13h.01M12.6 13h.01"/></svg>
+        <span class="label">ลองเอง</span>
+      </div>
+      <p>
+        เปิด <a href="../tools/latency.html">หน้าสำรวจข้อมูล latency</a>
+        แล้วดูฮิสโตแกรมของ <code>http_req_duration</code> ทั้ง 1,155 ค่า
+        จะเห็นว่าข้อมูลกระจุกตัวอยู่ในช่วงแคบ ๆ และมีหางยาวออกไปถึง 584 ms
+        ซึ่งเป็นเรื่องที่ตัวเลขค่าเฉลี่ยบอกไม่ได้
+      </p>
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function evidenceCell(m, fmt) {
+    var ev = m.evidence;
+    if (!ev) {
+      return '<span class="muted">ไม่ได้เก็บในการรันนี้</span>';
+    }
+    var bits = [];
+    var labels = {
+      total: 'total', rate: 'rate', avg: 'avg', min: 'min', p50: 'p50',
+      p90: 'p90', p95: 'p95', p99: 'p99', max: 'max', perRequest: 'ต่อคำขอ',
+      failedCount: 'จำนวนที่ล้มเหลว', samples: 'จำนวนตัวอย่าง', runSeconds: 'ระยะเวลารัน (s)',
+      shareOfDurationPct: 'สัดส่วนของ duration'
+    };
+    var seen = {};
+    Object.keys(ev).forEach(function (k) {
+      if (k === 'note' || seen[k]) return;
+      seen[k] = true;
+      var v = ev[k];
+      if (typeof v !== 'number') return;
+      var unit = '';
+      if (k === 'avg' || k === 'min' || k === 'max' || k === 'p50' || k === 'p90' || k === 'p95' || k === 'p99') unit = ' ms';
+      if (k === 'rate' && m.id === 'http_reqs') unit = '/s';
+      if (k === 'rate' && m.id !== 'http_reqs') unit = '';
+      if (k === 'shareOfDurationPct') unit = '%';
+      if (k === 'perRequest') unit = ' B';
+      bits.push('<span class="nowrap">' + (labels[k] || k) + ' <span class="num">' +
+        fmt(v, k === 'samples' || k === 'failedCount' || k === 'perRequest' ? 0 : 2) + unit + '</span></span>');
+    });
+    var html = bits.join(' · ');
+    if (ev.note) html += '<br><span class="muted" style="font-size:.85em">' + esc(ev.note) + '</span>';
+    return html;
+  }
+
+  function render(data) {
+    var host = document.getElementById('metric-table-host');
+    var status = document.getElementById('catalog-status');
+    var fmt = (window.LTK6 && LTK6.format) ? LTK6.format.number : function (v, d) { return Number(v).toFixed(d); };
+
+    var table = document.createElement('table');
+    table.className = 'data';
+    var caption = document.createElement('caption');
+    caption.textContent = 'แคตตาล็อก metric ของ k6 — ชนิด หน่วย ความหมาย วิธีตีความ เกณฑ์ที่ควรกังวล และค่าที่วัดได้จริง';
+    table.appendChild(caption);
+
+    var thead = document.createElement('thead');
+    var hr = document.createElement('tr');
+    ['metric', 'ชนิด', 'หน่วย', 'ความหมาย', 'วิธีตีความ', 'เกณฑ์ที่ควรกังวล', 'ค่าที่วัดได้ (10 VUs, 12 s)']
+      .forEach(function (t) {
+        var th = document.createElement('th');
+        th.textContent = t;
+        hr.appendChild(th);
+      });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    var tbody = document.createElement('tbody');
+    data.metrics.forEach(function (m) {
+      var tr = document.createElement('tr');
+      var cells = [
+        { text: m.id, cls: 'code-cell' },
+        { text: m.type, cls: 'wrap' },
+        { text: m.unit + (m.rateUnit ? ' (' + m.rateUnit + ')' : ''), cls: 'wrap' },
+        { text: m.meaning, cls: 'wrap' },
+        { text: m.reading, cls: 'wrap' },
+        { text: m.concern, cls: 'wrap' },
+        { html: evidenceCell(m, fmt), cls: 'wrap' }
+      ];
+      cells.forEach(function (c) {
+        var td = document.createElement('td');
+        td.className = c.cls || '';
+        if (c.html) td.innerHTML = c.html; else td.textContent = c.text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    var wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    wrap.appendChild(table);
+    host.appendChild(wrap);
+
+    status.innerHTML = 'อ่านข้อมูลจาก <code>assets/data/metrics.json</code> สำเร็จ — ' +
+      'แสดง metric ทั้งหมด <span class="num">' + data.metrics.length + '</span> รายการ ' +
+      'และคำศัพท์อ้างอิงอีก <span class="num">' + data.terms.length + '</span> คำ ' +
+      'ที่หน้า <a href="../glossary.html">อภิธานศัพท์</a>';
+  }
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6 && window.LTK6.__ctx;
+    if (!ctx) return;
+    ctx.loadJSON(ctx.root + 'assets/data/metrics.json').then(render).catch(function (err) {
+      document.getElementById('catalog-status').innerHTML =
+        '<span class="muted">อ่านไฟล์ metric ไม่สำเร็จ (' + esc(err.message) + ')</span> — ' +
+        'หน้านี้ต้องเปิดผ่านเว็บเซิร์ฟเวอร์ ไม่ใช่เปิดไฟล์ตรง ๆ ด้วย file:// ' +
+        'ให้รัน <code>python3 -m http.server</code> หรือ <code>npx serve</code> ในโฟลเดอร์ site แล้วเปิดผ่าน http://localhost';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

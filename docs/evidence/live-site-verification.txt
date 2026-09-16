@@ -1,0 +1,39 @@
+หลักฐานตรวจเว็บที่ deploy จริง — เก็บเมื่อ 2026-09-16 17:53:53 +07
+preview : https://k2pjaayi.autoclawai.space/
+stable  : https://ix75w7nk.autoclawai.space/
+
+=== 1) ทุกเส้นทางบนเว็บจริง (curl) ===
+200  /
+200  /index.html
+200  /lessons/01-tps.html
+200  /lessons/02-vu.html
+200  /lessons/03-metrics.html
+200  /lessons/04-percentiles.html
+200  /lessons/05-load-profiles.html
+200  /lessons/06-read-results.html
+200  /tools/calculator.html
+200  /tools/latency.html
+200  /quiz.html
+200  /progress.html
+200  /glossary.html
+200  /troubleshooting.html
+200  /examples.html
+200  /assets/css/main.css
+200  /assets/js/site.js
+200  /assets/data/latency-samples.json
+200  /assets/data/metrics.json
+200  /favicon.svg
+200  /examples/smoke.js
+200  /examples/load.js
+
+=== 2) ข้อมูลจริงที่เสิร์ฟจากเว็บ ===
+n=1155 mean=54.25 p95=74.53 p99=466.29 bins=51
+
+=== 3) เบราว์เซอร์จริง 14 หน้า × 3 ความกว้าง (360/768/1440) ===
+ผลลัพธ์: ผ่าน 42/42 · 200 ทุกหน้า · console error 0 · page error 0 · overflow แนวนอน 0
+หมายเหตุ: รันด้วย Chromium 153 บน URL จริง ไม่ใช่ localhost
+
+=== 4) บั๊กที่พบจากการตรวจรอบนี้และแก้แล้ว ===
+lessons/06-read-results.html เคยล้นแนวนอน 213px @360 และ 101px @768
+สาเหตุ: ตาราง 2 ตัวครอบด้วย <div> เปล่า แทน <div class="table-wrap">
+แก้แล้ว + เพิ่มด่านตรวจใน scripts/verify-site.mjs (32 → 33 รายการ) และทดสอบ negative control แล้ว

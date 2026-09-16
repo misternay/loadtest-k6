@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>อภิธานศัพท์ k6 — ศัพท์เทคนิคภาษาไทยกว่า 60 คำ | Load Testing ด้วย k6</title>
+<meta name="description" content="อภิธานศัพท์โหลดเทสต์และ k6 ภาษาไทย เรียงตามตัวอักษร มีช่องค้นหาและตัวกรอง ใช้ข้อมูลชุดเดียวกับบทเรียนเพื่อไม่ให้คำอธิบายขัดกัน">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="glossary" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    หน้านี้ต้องใช้ JavaScript ในการอ่านข้อมูลศัพท์และตัวกรอง
+    กรุณาเปิด JavaScript แล้วโหลดหน้าใหม่
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M3.5 4.2h4.3c1.2 0 2.2.9 2.2 2.1v9.5c0-.9-.8-1.6-1.8-1.6H3.5z"/><path d="M16.5 4.2h-4.3c-1.2 0-2.2.9-2.2 2.1v9.5c0-.9.8-1.6 1.8-1.6h4.7z"/></svg>
+      อ้างอิง
+    </p>
+
+    <h1>อภิธานศัพท์</h1>
+
+    <p class="lede">
+      คำศัพท์ที่ใช้ในบทเรียนทั้งหกบท พร้อมคำอธิบายภาษาไทยและคำอังกฤษกำกับ
+      เรียงตามตัวอักษรไทย มีช่องค้นหาและตัวกรองให้หาคำได้เร็ว
+    </p>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">ข้อมูลชุดเดียวกับบทเรียน</span>
+      </div>
+      <p>
+        รายการ metric ในหน้านี้ และตารางแคตตาล็อกใน
+        <a href="lessons/03-metrics.html">บทที่ 3</a> อ่านจากไฟล์เดียวกันคือ
+        <code>assets/data/metrics.json</code> คำอธิบายจึงเป็นชุดเดียวกันเสมอ
+        แก้ที่ไฟล์เดียวแล้วทั้งสองหน้าจะเปลี่ยนตามพร้อมกัน
+      </p>
+    </div>
+
+    <h2 id="search">ค้นหาและกรอง</h2>
+
+    <div class="form-grid">
+      <div class="field search-field">
+        <label for="glossary-query">ค้นหาคำศัพท์ <span class="hint">พิมพ์ภาษาไทยหรืออังกฤษก็ได้</span></label>
+        <input type="search" id="glossary-query" placeholder="เช่น percentile, เปอร์เซ็นไทล์, throughput" autocomplete="off" aria-describedby="glossary-count">
+      </div>
+      <div class="field">
+        <label for="glossary-group">กรองตามชนิด</label>
+        <select id="glossary-group">
+          <option value="all">ทั้งหมด</option>
+          <option value="metric">metric ของ k6</option>
+          <option value="term">ศัพท์และแนวคิด</option>
+        </select>
+      </div>
+    </div>
+
+    <p class="glossary-count" id="glossary-count" role="status" aria-live="polite">กำลังอ่านข้อมูล</p>
+
+    <div class="btn-row">
+      <button class="btn btn--small" type="button" id="glossary-clear">ล้างตัวกรอง</button>
+    </div>
+
+    <h2 id="entries">รายการคำศัพท์</h2>
+
+    <div id="glossary-state" class="panel--empty" role="status" aria-live="polite">
+      กำลังอ่านข้อมูลศัพท์
+    </div>
+
+    <div id="glossary-empty" class="empty-state" hidden>
+      ไม่พบคำศัพท์ที่ตรงกับเงื่อนไข ลองพิมพ์คำที่สั้นลง หรือกดปุ่มล้างตัวกรอง
+    </div>
+
+    <dl class="glossary-list bleed" id="glossary-list"></dl>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var LEADING_VOWELS = 'เแโใไ';
+
+  function thaiSortKey(s) {
+    var t = String(s).replace(/[\s\u200b]+/g, '');
+    if (t.length > 1 && LEADING_VOWELS.indexOf(t.charAt(0)) !== -1) {
+      return t.charAt(1) + t.charAt(0) + t.slice(2);
+    }
+    return t;
+  }
+
+  function isThaiChar(c) {
+    return c >= '\u0E00' && c <= '\u0E7F';
+  }
+
+  /* เรียงตามตัวอักษรไทย โดยให้คำที่ขึ้นต้นด้วยอักษรไทยมาก่อนคำที่ขึ้นต้นด้วยอักษรโรมัน */
+  function compareEntries(a, b) {
+    var ak = thaiSortKey(a.th);
+    var bk = thaiSortKey(b.th);
+    var ag = isThaiChar(ak.charAt(0)) ? 0 : 1;
+    var bg = isThaiChar(bk.charAt(0)) ? 0 : 1;
+    if (ag !== bg) return ag - bg;
+    if (ak < bk) return -1;
+    if (ak > bk) return 1;
+    return 0;
+  }
+
+  function esc(t) {
+    return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* ไฮไลต์คำที่ค้นหา โดยหนีอักขระ HTML ก่อนเพื่อไม่ให้เกิดช่องโหว่ */
+  function highlight(text, query) {
+    var safe = esc(text);
+    if (!query) return safe;
+    var safeQuery = esc(query);
+    var idx = safe.toLowerCase().indexOf(safeQuery.toLowerCase());
+    if (idx === -1) return safe;
+    var out = '';
+    var rest = safe;
+    var ql = safeQuery.length;
+    while (true) {
+      var i = rest.toLowerCase().indexOf(safeQuery.toLowerCase());
+      if (i === -1) { out += rest; break; }
+      out += rest.slice(0, i) + '<mark>' + rest.slice(i, i + ql) + '</mark>';
+      rest = rest.slice(i + ql);
+    }
+    return out;
+  }
+
+  /* ลิงก์ไปบทเรียนที่เกี่ยวข้อง สำหรับคำที่ผูกกับบทใดบทหนึ่งชัดเจน */
+  var SEE_ALSO = {
+    'http_reqs': { file: 'lessons/01-tps.html', label: 'บทที่ 1 — คำนวณ TPS' },
+    'http_req_duration': { file: 'lessons/03-metrics.html', label: 'บทที่ 3 — แคตตาล็อก metric' },
+    'http_req_waiting': { file: 'lessons/03-metrics.html', label: 'บทที่ 3 — แคตตาล็อก metric' },
+    'http_req_blocked': { file: 'lessons/03-metrics.html', label: 'บทที่ 3 — แคตตาล็อก metric' },
+    'http_req_connecting': { file: 'lessons/03-metrics.html', label: 'บทที่ 3 — แคตตาล็อก metric' },
+    'iteration_duration': { file: 'lessons/01-tps.html', label: 'บทที่ 1 — คำนวณ TPS' },
+    'vus': { file: 'lessons/02-vu.html', label: 'บทที่ 2 — VU ทำงานอย่างไร' },
+    'dropped_iterations': { file: 'lessons/05-load-profiles.html', label: 'บทที่ 5 — รูปแบบการทดสอบ' },
+    'http_req_failed': { file: 'lessons/06-read-results.html', label: 'บทที่ 6 — อ่านผลลัพธ์' },
+    'percentile': { file: 'lessons/04-percentiles.html', label: 'บทที่ 4 — เปอร์เซ็นไทล์' },
+    'cdf': { file: 'tools/latency.html', label: 'เครื่องมือ — สำรวจข้อมูล latency' },
+    'histogram': { file: 'tools/latency.html', label: 'เครื่องมือ — สำรวจข้อมูล latency' },
+    'littles-law': { file: 'lessons/01-tps.html', label: 'บทที่ 1 — กฎของ Little' },
+    'saturation-point': { file: 'lessons/05-load-profiles.html', label: 'บทที่ 5 — จุดอิ่มตัว' },
+    'threshold': { file: 'lessons/05-load-profiles.html', label: 'บทที่ 5 — แปล SLO เป็น threshold' },
+    'executor': { file: 'lessons/02-vu.html', label: 'บทที่ 2 — เลือก executor' },
+    'vu': { file: 'lessons/02-vu.html', label: 'บทที่ 2 — VU ทำงานอย่างไร' },
+    'think-time': { file: 'lessons/02-vu.html', label: 'บทที่ 2 — think time' },
+    'tail-latency': { file: 'lessons/04-percentiles.html', label: 'บทที่ 4 — หางของการกระจาย' },
+    'slo': { file: 'lessons/05-load-profiles.html', label: 'บทที่ 5 — แปล SLO เป็น threshold' }
+  };
+
+  document.addEventListener('ltk6:ready', function () {
+    var ctx = window.LTK6.__ctx;
+    var fmt = window.LTK6.format;
+    if (!ctx) return;
+
+    var stateEl = document.getElementById('glossary-state');
+    var listEl = document.getElementById('glossary-list');
+    var emptyEl = document.getElementById('glossary-empty');
+    var countEl = document.getElementById('glossary-count');
+    var queryEl = document.getElementById('glossary-query');
+    var groupEl = document.getElementById('glossary-group');
+
+    ctx.loadJSON(ctx.root + 'assets/data/metrics.json').then(function (data) {
+      var entries = [];
+
+      data.metrics.forEach(function (m) {
+        entries.push({
+          id: m.id,
+          th: m.th,
+          en: m.id,
+          def: m.summary + ' ' + m.meaning + ' วิธีตีความ: ' + m.reading + ' เกณฑ์ที่ควรกังวล: ' + m.concern,
+          group: 'metric',
+          meta: m.type + (m.unit ? ' · หน่วย ' + m.unit : '') + (m.rateUnit ? ' · อัตรา ' + m.rateUnit : ''),
+          see: SEE_ALSO[m.id] || { file: 'lessons/03-metrics.html', label: 'บทที่ 3 — แคตตาล็อก metric' }
+        });
+      });
+
+      data.terms.forEach(function (t) {
+        entries.push({
+          id: t.id,
+          th: t.th,
+          en: t.en,
+          def: t.def,
+          group: 'term',
+          meta: 'ศัพท์และแนวคิด',
+          see: SEE_ALSO[t.id] || null
+        });
+      });
+
+      entries.sort(compareEntries);
+
+      stateEl.hidden = true;
+
+      var anchorById = {};
+      entries.forEach(function (e, i) {
+        var anchor = 'term-' + (i + 1) + '-' + e.id.replace(/[^a-z0-9-]/gi, '-');
+        e.anchor = anchor;
+        anchorById[e.id] = anchor;
+      });
+
+      function render(query, group) {
+        var q = String(query || '').trim().toLowerCase();
+        var shown = entries.filter(function (e) {
+          if (group !== 'all' && e.group !== group) return false;
+          if (!q) return true;
+          return (e.th + ' ' + e.en + ' ' + e.def + ' ' + e.id).toLowerCase().indexOf(q) !== -1;
+        });
+
+        listEl.innerHTML = shown.map(function (e) {
+          var seeHtml = e.see
+            ? '<span class="see">อ่านต่อ: <a href="' + ctx.root + e.see.file + '">' +
+              esc(e.see.label) + '</a></span>'
+            : '';
+          return '<div class="glossary-item" id="' + e.anchor + '" data-group="' + e.group + '">' +
+            '<dt><span class="th">' + highlight(e.th, query) + '</span>' +
+            '<span class="en">' + highlight(e.en, query) + '</span>' +
+            '<span class="status-pill' + (e.group === 'metric' ? ' is-done' : '') + '">' +
+            esc(e.group === 'metric' ? 'metric' : 'ศัพท์') + '</span></dt>' +
+            '<dd>' + highlight(e.def, query) + seeHtml + '</dd>' +
+            '</div>';
+        }).join('');
+
+        emptyEl.hidden = shown.length > 0;
+        var metricCount = shown.filter(function (e) { return e.group === 'metric'; }).length;
+        countEl.textContent = 'แสดง ' + shown.length + ' จากทั้งหมด ' + entries.length +
+          ' คำ (metric ' + metricCount + ' คำ, ศัพท์และแนวคิด ' +
+          (shown.length - metricCount) + ' คำ)' +
+          (q ? ' · เงื่อนไขค้นหา: "' + query + '"' : '');
+      }
+
+      function update() {
+        render(queryEl.value, groupEl.value);
+      }
+
+      queryEl.addEventListener('input', update);
+      groupEl.addEventListener('change', update);
+      document.getElementById('glossary-clear').addEventListener('click', function () {
+        queryEl.value = '';
+        groupEl.value = 'all';
+        update();
+        queryEl.focus();
+      });
+
+      /* รองรับการเปิดลิงก์ตรงมาที่คำใดคำหนึ่ง เช่น #term-5-percentile */
+      if (window.location.hash) {
+        var target = document.getElementById(window.location.hash.slice(1));
+        if (target) {
+          queryEl.value = '';
+          groupEl.value = 'all';
+          render('', 'all');
+          target.scrollIntoView({ block: 'center' });
+          return;
+        }
+      }
+      render('', 'all');
+
+      void fmt;
+    }).catch(function (err) {
+      stateEl.className = 'callout callout--warn';
+      stateEl.innerHTML =
+        '<div class="callout__head">' +
+        '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>' +
+        '<span class="label">อ่านไฟล์ข้อมูลไม่สำเร็จ</span></div>' +
+        '<p>โหลด <code>assets/data/metrics.json</code> ไม่ได้ (' + esc(err.message) + ')</p>' +
+        '<p><strong>วิธีแก้:</strong> หน้านี้ต้องเปิดผ่านเว็บเซิร์ฟเวอร์ ไม่ใช่เปิดไฟล์ตรง ๆ ด้วย file:// ' +
+        'ให้รัน <code>python3 -m http.server</code> ในโฟลเดอร์ site แล้วเปิดผ่าน http://localhost</p>';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แบบทดสอบท้ายบท — 6 ชุด พร้อมเฉลยและคำอธิบาย | Load Testing ด้วย k6</title>
+<meta name="description" content="แบบทดสอบท้ายบทเรียน k6 หกชุด ชุดละหกข้อ พร้อมเฉลยและคำอธิบายทุกข้อ บันทึกคะแนนที่ดีที่สุดไว้ในเครื่องและดูคะแนนรวมได้ทันที">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="quiz" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    แบบทดสอบในหน้านี้ทำงานด้วย JavaScript กรุณาเปิด JavaScript เพื่อทำแบบทดสอบ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><circle cx="10" cy="10" r="7.2"/><path d="M6.9 10.2l2.1 2.1 4.1-4.4"/></svg>
+      แบบฝึกหัด
+    </p>
+
+    <h1>แบบทดสอบท้ายบท</h1>
+
+    <p class="lede">
+      หกชุดตรงกับบทเรียนทั้งหกบท ชุดละหกข้อ ทุกข้อมีเฉลยและคำอธิบายว่าทำไมคำตอบนั้นจึงถูก
+      รวมถึงอ้างอิงตัวเลขจริงจากการรันที่ใช้ในบทเรียน ทำได้ไม่จำกัดจำนวนครั้ง
+      และระบบจะเก็บคะแนนที่ดีที่สุดของแต่ละบทไว้ให้
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ทั้งหมด <span id="quiz-total-count">36</span> ข้อ
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ประมาณ 15 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        <a href="progress.html">ดูความคืบหน้า</a>
+      </div>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">วิธีใช้หน้านี้</span>
+      </div>
+      <ul>
+        <li>เลือกคำตอบในแต่ละข้อแล้วกดปุ่ม <strong>ตรวจคำตอบ</strong> ของชุดนั้น คำตอบที่ถูกและคำอธิบายจะแสดงทันที</li>
+        <li>ข้อที่ยังไม่ได้ตอบจะถูกนับว่าตอบผิด และมีข้อความบอกว่าข้อใดยังว่างอยู่</li>
+        <li>กด <strong>ล้างคำตอบชุดนี้</strong> เพื่อเริ่มทำชุดเดิมใหม่ได้ทันที</li>
+        <li>คะแนนที่ดีที่สุดของแต่ละบทจะถูกบันทึกไว้ในเบราว์เซอร์นี้ ไม่ได้ส่งไปที่ใด</li>
+      </ul>
+    </div>
+
+    <h2 id="quiz-sets">ชุดแบบทดสอบ</h2>
+
+    <p>
+      แต่ละชุดอ้างอิงบทเรียนบทที่ตรงกัน ถ้าทำได้ต่ำกว่าครึ่ง ให้กลับไปอ่านบทนั้นอีกครั้ง
+      แล้วค่อยกลับมาทำใหม่ คำอธิบายทุกข้อเขียนให้ชี้จุดที่สำคัญจริง ๆ ไม่ใช่แค่บอกว่าตอบถูกหรือผิด
+    </p>
+
+    <div id="quiz-host" class="bleed"></div>
+
+    <h2 id="after-quiz">หลังทำแบบทดสอบ</h2>
+
+    <ul>
+      <li>ดูคะแนนรวมและบทที่อ่านแล้วได้ที่หน้า <a href="progress.html">ความคืบหน้า</a> ซึ่งมีปุ่มส่งออกและนำเข้าข้อมูลด้วย</li>
+      <li>ถ้าต้องการทบทวนคำศัพท์ก่อนทำใหม่ เปิด <a href="glossary.html">อภิธานศัพท์</a> ซึ่งมีช่องค้นหา</li>
+      <li>ถ้าข้อใดทำให้ไม่แน่ใจ ให้เปิดกลับไปที่บทเรียนบทนั้นจากเมนูด้านซ้าย แล้วดูตารางข้อมูลจริงประกอบ</li>
+    </ul>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/quiz.js"></script>
+<script src="assets/js/site.js"></script>
+<script>
+document.addEventListener('ltk6:ready', function () {
+  var host = document.getElementById('quiz-host');
+  if (!host) return;
+  window.LTK6.quiz.render('quiz-host');
+
+  var count = document.getElementById('quiz-total-count');
+  if (count) count.textContent = window.LTK6.quiz.questionCount();
+});
+</script>
+
+</body>
+</html>

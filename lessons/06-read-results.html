@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บทที่ 6 — อ่านผลลัพธ์และปัญหาที่พบบ่อย | Load Testing ด้วย k6</title>
+<meta name="description" content="วิธีอ่านสรุปผลท้ายการรันของ k6 ทีละบล็อก พร้อมตัวอย่างตัวเลขจริง วิธีส่งออกผลเป็น JSON หรือ CSV และข้อควรระวังด้านจริยธรรมในการทดสอบโหลด">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="06-read-results" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูนำทางและสารบัญในหน้านี้สร้างด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งานเมนู
+    เนื้อหาบทเรียนยังอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M4.4 4.4h11.2L10 10l5.6 5.6H4.4"/></svg>
+      บทที่ 6 จาก 6
+    </p>
+
+    <h1>อ่านผลลัพธ์ให้ออก และไม่สรุปผิด</h1>
+
+    <p class="lede">
+      เมื่อการรันจบ k6 พิมพ์ข้อมูลหลายสิบบรรทัดรวดเดียว จุดที่คนอ่านผิดบ่อยที่สุดคือกับดักของ
+      <code>http_req_failed</code> และ p99 ที่ไม่ปรากฏโดยค่าเริ่มต้น
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ใช้เวลาอ่านประมาณ 15 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ต้องอ่านก่อน: <a href="03-metrics.html">บทที่ 3</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ต่อจากนี้: <a href="../troubleshooting.html">แก้ปัญหาที่พบบ่อย</a>
+      </div>
+    </div>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>threshold ที่ไม่ผ่านทำให้ k6 จบด้วย exit code 99 จึงใช้กั้นไปป์ไลน์ได้ทันที</li>
+        <li>p99 ไม่ปรากฏบนหน้าจอสรุปผลโดยค่าเริ่มต้น ต้องเพิ่มด้วย <code>--summary-trend-stats</code> หรือส่งข้อมูลดิบมาคำนวณเอง</li>
+        <li>ผลของ <code>check()</code> ไม่ทำให้การรันล้มเหลวถ้าไม่มี threshold คุม metric <code>checks</code></li>
+        <li>smoke test ควรใช้เพดานสุขภาพที่หลวมกว่าเกณฑ์ SLO เพราะตัวอย่างน้อยเกินไป</li>
+      </ol>
+    </div>
+
+    <h2 id="order">ลำดับการอ่าน: สองบรรทัดแรกตัดสินทุกอย่าง</h2>
+
+    <p>
+      k6 พิมพ์ metric เรียงตามชื่อ ไม่ได้จัดกลุ่มเป็นห้ากลุ่มตามหัวข้อ ด้านล่างจึงเป็น
+      ลำดับการอ่านที่เราตั้งขึ้น
+    </p>
+
+    <p class="keypoint">อ่านบล็อก EXECUTION ก่อนเสมอ ถ้าการรันไม่สมบูรณ์ ตัวเลขที่เหลือไม่มีความหมาย</p>
+
+    <ol class="steps">
+      <li>
+        <strong>บล็อก EXECUTION</strong> — บรรทัดที่ขึ้นต้นด้วย <code>running (…)</code>
+        บอกว่าการรันจบครบไหม มีรอบใดถูกขัดจังหวะหรือไม่
+        ถ้าที่นี่ผิดปกติ ตัวเลขที่เหลือทั้งหมดไม่ต้องอ่านต่อ
+      </li>
+      <li>
+        <strong>บล็อก THRESHOLDS</strong> — สรุปว่าเกณฑ์ที่ตั้งไว้ผ่านหรือไม่
+        เป็นบรรทัดที่มีผลต่อ exit code และต่อไปป์ไลน์อัตโนมัติ
+      </li>
+      <li>
+        <strong>บล็อก checks</strong> — สัดส่วนการตรวจเงื่อนไขทางธุรกิจที่ผ่าน
+      </li>
+      <li>
+        <strong>บล็อก HTTP</strong> — metric หลักของคำขอ ได้แก่จำนวน อัตราความผิดพลาด
+        และเวลาตอบสนอง พร้อม sub-metric ที่แยกเวลาออกเป็นส่วน
+      </li>
+      <li>
+        <strong>บล็อก NETWORK</strong> — ปริมาณข้อมูลที่ส่งและรับ
+        ใช้ตรวจว่าเรากำลังวัดสิ่งที่คิดว่ากำลังวัดอยู่จริง
+      </li>
+    </ol>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">ทำไมต้องเริ่มที่ EXECUTION</span>
+      </div>
+      <p>
+        ถ้าการรันถูกขัดจังหวะกลางทาง หรือ VU ทำงานไม่ครบตามที่ตั้งไว้ ตัวเลข p95 ที่สวยงาม
+        ก็มาจากข้อมูลเพียงครึ่งเดียว การอ่านตัวเลขประสิทธิภาพก่อนตรวจว่าการรันสมบูรณ์หรือไม่
+        เป็นสาเหตุอันดับต้น ๆ ของการสรุปผิด
+      </p>
+    </div>
+
+    <h2 id="block-execution">บล็อก EXECUTION</h2>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>สิ่งที่บรรทัดในบล็อก EXECUTION บอก และค่าจากการรันของเรา</caption>
+        <thead>
+          <tr>
+            <th class="wrap">สิ่งที่เห็น</th>
+            <th class="wrap">อ่านว่าอะไร</th>
+            <th class="wrap">ค่าจากการรันนี้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">running (12.4s)</td>
+            <td class="wrap">ระยะเวลารันจริง ซึ่งมากกว่าเวลาที่ตั้งไว้เสมอ เพราะต้องรอรอบสุดท้ายทำงานจนจบ</td>
+            <td class="wrap">ตั้งไว้ 12 วินาที รันจริง 12.36 วินาที</td>
+          </tr>
+          <tr>
+            <td class="code-cell">1155 complete</td>
+            <td class="wrap">จำนวนรอบที่ทำงานจนจบสมบูรณ์</td>
+            <td class="wrap">1,155 รอบ</td>
+          </tr>
+          <tr>
+            <td class="code-cell">0 interrupted</td>
+            <td class="wrap">จำนวนรอบที่ถูกขัดจังหวะกลางทาง ควรเป็น 0</td>
+            <td class="wrap">0 รอบ</td>
+          </tr>
+          <tr>
+            <td class="code-cell">vus 10 min=10 max=10</td>
+            <td class="wrap">จำนวน VU ที่ทำงานจริง ถ้า max ต่ำกว่าที่ตั้งไว้ แปลว่า k6 สร้าง VU ไม่ครบ</td>
+            <td class="wrap">ตั้ง 10 ได้จริง 10 ตลอดการรัน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">vus_max 10</td>
+            <td class="wrap">จำนวน VU ที่ k6 จองไว้ล่วงหน้า</td>
+            <td class="wrap">10 ตัว</td>
+          </tr>
+          <tr>
+            <td class="code-cell">dropped_iterations</td>
+            <td class="wrap">รอบที่ถูกทิ้งเพราะไม่มี VU ว่าง เกิดกับ executor แบบ arrival-rate</td>
+            <td class="wrap">ไม่ปรากฏ เพราะการรันนี้ใช้จำนวน VU คงที่</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="block-thresholds">บล็อก THRESHOLDS</h2>
+
+    <p>
+      บล็อกนี้ปรากฏเฉพาะเมื่อสคริปต์ตั้ง <code>thresholds</code> ไว้ ถ้าไม่มี บรรทัดนี้หายไป
+      ทั้งบล็อก ซึ่งไม่ได้แปลว่าอะไรผิด เมื่อ threshold ไม่ผ่าน k6 จบด้วย exit code 99
+      ซึ่งแยกจากความล้มเหลวเพราะสคริปต์ผิดพลาด จึงใช้กั้นไปป์ไลน์ได้
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ความหมายของสิ่งที่เห็นในบล็อก THRESHOLDS</caption>
+        <thead>
+          <tr>
+            <th class="wrap">สิ่งที่เห็น</th>
+            <th class="wrap">อ่านว่าอะไร</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">เครื่องหมายถูกนำหน้าบรรทัดเกณฑ์</td>
+            <td class="wrap">เกณฑ์ข้อนั้นผ่าน — ตัวเลขที่ตามมาคือค่าจริงที่วัดได้ ณ ตอนตัดสิน</td>
+          </tr>
+          <tr>
+            <td class="wrap">เครื่องหมายกากบาทนำหน้าบรรทัดเกณฑ์</td>
+            <td class="wrap">เกณฑ์ข้อนั้นไม่ผ่าน และ k6 จะจบด้วย exit code 99</td>
+          </tr>
+          <tr>
+            <td class="wrap">เกณฑ์ที่เขียนว่า <code>{ p(95)&lt;500 }</code></td>
+            <td class="wrap">เงื่อนไขที่ตรวจ พร้อมค่าจริงที่ใช้ตัดสิน</td>
+          </tr>
+          <tr>
+            <td class="code-cell">aborted</td>
+            <td class="wrap">การรันถูกหยุดกลางทางเพราะเกณฑ์ที่ตั้ง <code>abortOnFail</code> ไว้ไม่ผ่าน — ข้อมูลที่ได้จะไม่ครบช่วง</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--evidence">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.2 16.4V3.8"/><path d="M3.2 16.4h13.6"/><path d="M6.6 16.4v-4.6M10 16.4V8.2M13.4 16.4v-6"/></svg>
+        <span class="label">ตัวอย่างเกณฑ์ที่ผ่านจริง</span>
+      </div>
+      <p>
+        ในการรันที่ตั้ง <code>http_req_duration: ['p(95)&lt;500']</code> ไว้
+        k6 รายงานว่าเกณฑ์นี้ผ่าน โดยวัดค่า p(95) ได้ 28.39 มิลลิวินาที
+        ซึ่งต่ำกว่าเพดาน 500 มิลลิวินาทีอยู่มาก
+        ตัวเลข 28.39 ms เป็นผลการรันจริงคนละครั้งกับชุดข้อมูล 1,155 ค่าในบทที่ 4
+        เพราะการรันนั้นใช้จำนวน VU และอัตราที่ต่างกัน
+      </p>
+    </div>
+
+    <h2 id="block-checks">บล็อก checks</h2>
+
+    <p>
+      <code>check()</code> คือการตรวจเงื่อนไขทางธุรกิจที่เราเขียนเอง ผลของ check
+      <strong>ไม่ทำให้การรันล้มเหลว</strong> ถ้าไม่มี threshold คุม metric <code>checks</code>
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">check ที่มีค่าจริง เพราะมี threshold คุม</span>
+      </div>
+      <pre><code>import { check } from 'k6';
+import http from 'k6/http';
+
+export const options = {
+  thresholds: {
+    // ถ้าไม่ใส่บรรทัดนี้ ผลของ check จะเป็นเพียงข้อมูลประกอบ ไม่มีผลต่อ exit code
+    checks: ['rate&gt;0.99'],
+  },
+};
+
+export default function () {
+  const res = http.get(`${BASE_URL}/api/items`);
+
+  check(res, {
+    'สถานะเป็น 200':        (r) =&gt; r.status === 200,
+    'ได้รายการไม่ต่ำกว่า 20': (r) =&gt; JSON.parse(r.body).count &gt;= 20,
+    'ชื่อสินค้าไม่ว่าง':      (r) =&gt; JSON.parse(r.body).items.every((i) =&gt; i.name.length &gt; 0),
+  });
+}</code></pre>
+    </div>
+
+    <p>
+      การรันที่เป็นหลักฐานของบทเรียนนี้ไม่ได้เขียน <code>check()</code> ไว้ จึงไม่มีบรรทัด
+      <code>checks</code> และไม่มีเครื่องหมายกำกับ <code>http_req_failed</code>
+    </p>
+
+    <h2 id="block-http">บล็อก HTTP</h2>
+
+    <p>
+      อ่านคู่กัน โดยเริ่มจากอัตราความผิดพลาด แล้วจึงดูเวลา
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>การอ่านบล็อก HTTP ตามลำดับ พร้อมค่าจากการรันจริง</caption>
+        <thead>
+          <tr>
+            <th class="num">ลำดับ</th>
+            <th>บรรทัด</th>
+            <th class="wrap">อ่านว่าอะไร</th>
+            <th class="wrap">ค่าจริงในการรันนี้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td>
+            <td class="code-cell">http_req_failed</td>
+            <td class="wrap">มีคำขอที่ล้มเหลวกี่เปอร์เซ็นต์ ถ้าเกิน 1% ให้หยุดอ่านบรรทัดอื่นแล้วหาสาเหตุก่อน</td>
+            <td class="wrap">0.00% — ไม่มีคำขอใดล้มเหลวเลยจาก 1,155 คำขอ</td>
+          </tr>
+          <tr>
+            <td class="num">2</td>
+            <td class="code-cell">http_reqs</td>
+            <td class="wrap">ยอดสะสมและอัตราต่อวินาที ใช้เป็น throughput ของการรันนี้</td>
+            <td class="wrap">1,155 คำขอ ที่ 93.44 คำขอต่อวินาที</td>
+          </tr>
+          <tr>
+            <td class="num">3</td>
+            <td class="code-cell">http_req_duration</td>
+            <td class="wrap">เวลาตอบสนอง ดู avg กับ p(95) พร้อมกัน ถ้าต่างกันมากแปลว่ามีหาง</td>
+            <td class="wrap">avg 54.25 ms · med 44.40 ms · p(90) 65.31 ms · p(95) 74.53 ms · max 584.70 ms</td>
+          </tr>
+          <tr>
+            <td class="num">4</td>
+            <td class="code-cell">http_req_waiting</td>
+            <td class="wrap">เวลาที่รอเซิร์ฟเวอร์ ถ้ากินสัดส่วนมากสุด แปลว่าคอขวดอยู่ที่เซิร์ฟเวอร์</td>
+            <td class="wrap">avg 54.03 ms คิดเป็น 99.58% ของเวลาต่อคำขอ</td>
+          </tr>
+          <tr>
+            <td class="num">5</td>
+            <td class="code-cell">http_req_blocked<br>http_req_connecting</td>
+            <td class="wrap">เวลาฝั่งเครื่องทดสอบ ถ้าสูงแปลว่าปัญหาอยู่ที่ฝั่งเรา ไม่ใช่ฝั่งเซิร์ฟเวอร์</td>
+            <td class="wrap">avg 0.02 ms และ 0.01 ms — แทบไม่มีเลย</td>
+          </tr>
+          <tr>
+            <td class="num">6</td>
+            <td class="code-cell">http_req_sending<br>http_req_receiving</td>
+            <td class="wrap">เวลาส่งคำขอและรับคำตอบ ขึ้นกับขนาดข้อมูลและคุณภาพเครือข่าย</td>
+            <td class="wrap">avg 0.05 ms และ 0.17 ms — น้อยมาก</td>
+          </tr>
+          <tr>
+            <td class="num">7</td>
+            <td class="code-cell">iteration_duration</td>
+            <td class="wrap">เวลาต่อรอบทั้งหมด รวม think time ใช้คำนวณ iterations/s</td>
+            <td class="wrap">avg 105.39 ms เทียบกับ 54.25 ms ของคำขอ → think time ราว 51 ms</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--danger">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M7.4 7.4l5.2 5.2M12.6 7.4l-5.2 5.2"/></svg>
+        <span class="label">กับดักที่อันตรายที่สุด: http_req_failed กับ 4xx</span>
+      </div>
+      <p>
+        k6 นับสถานะ 4xx เป็นความล้มเหลวโดยค่าเริ่มต้น ซึ่งถูกต้องสำหรับ endpoint ที่ควรตอบ 200
+        แต่ผิดสำหรับการทดสอบที่ตั้งใจยิงไปยัง endpoint ที่ควรตอบ 404
+        ถ้าไม่ใช้แท็ก <code>expected_response</code> อัตราความล้มเหลวที่เห็นจะสูงเกินจริง
+        และถ้าใช้แท็กนั้นแล้วไม่เขียน <code>check()</code> กำกับ
+        ปัญหาจริงก็จะถูกกลบไปอีกทางหนึ่ง
+      </p>
+    </div>
+
+    <div class="callout callout--danger">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M7.4 7.4l5.2 5.2M12.6 7.4l-5.2 5.2"/></svg>
+        <span class="label">กับดักที่สอง: k6 ไม่แสดง p99 ให้โดยค่าเริ่มต้น</span>
+      </div>
+      <p>
+        สรุปผลมาตรฐานของ Trend แสดงเพียง avg, min, med, max, p(90) และ p(95) เท่านั้น
+        ค่า p99 ที่หลายทีมใช้เป็นเกณฑ์จะไม่ปรากฏบนหน้าจอ ถ้าไม่ได้ตั้ง threshold
+        ที่อ้างถึง p(99) ไว้ หรือไม่ได้ส่งออกข้อมูลดิบออกมาคำนวณเอง
+        ตัวเลข p99 466.29 ms ที่ใช้ในบทที่ 4 มาจากการคำนวณบนข้อมูลดิบทั้ง 1,155 ค่า
+        จากไฟล์ที่ส่งออกด้วย <code>-o csv=…</code> ไม่ได้มาจากหน้าจอสรุปผล
+      </p>
+    </div>
+
+    <h2 id="block-network">บล็อก NETWORK</h2>
+
+    <p>
+      สองบรรทัดนี้ใช้ตรวจว่ากำลังวัดสิ่งที่คิดอยู่จริง ถ้าทดสอบอัปโหลดไฟล์แต่
+      <code>data_sent</code> ใกล้ศูนย์ แปลว่าไฟล์ไม่ได้ถูกส่งไป
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>ปริมาณข้อมูลจากการรันจริง</caption>
+        <thead>
+          <tr>
+            <th>metric</th>
+            <th class="num">รวมทั้งการรัน</th>
+            <th class="num">เฉลี่ยต่อคำขอ</th>
+            <th class="wrap">ตรวจอะไรได้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">data_sent</td>
+            <td class="num">91,245 B</td>
+            <td class="num">79 B</td>
+            <td class="wrap">คำขอเป็น GET ที่ไม่มี body ขนาด 79 ไบต์จึงสมเหตุสมผล (ส่วนหัว HTTP)</td>
+          </tr>
+          <tr>
+            <td class="code-cell">data_received</td>
+            <td class="num">212,520 B</td>
+            <td class="num">184 B</td>
+            <td class="wrap">ขนาดคำตอบเล็กมาก ถ้าคาดว่าจะได้ข้อมูลก้อนใหญ่ แปลว่า endpoint ตอบอย่างอื่น</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      ตัวเลข 79 และ 184 ไบต์ได้จากการหารผลรวมด้วย <span class="key-figure">1,155</span> คำขอ
+      โดยนับเฉพาะส่วน body ไม่รวมส่วนหัว HTTP
+    </p>
+
+    <h2 id="real-output">ตัวอย่างสรุปผลที่จัดรูปแบบให้อ่านง่าย</h2>
+
+    <p>
+      บล็อกด้านล่างคือสรุปผลการรันที่เป็นหลักฐานของบทเรียนนี้ ค่าทุกตัววัดได้จริง และปรับหน่วย
+      เป็นมิลลิวินาทีเพื่อเทียบกันในแนวตั้ง (k6 แสดงค่าเล็กกว่า 1 มิลลิวินาทีเป็นไมโครวินาที
+      และแทนเครื่องหมายถูกกับกากบาทด้วยข้อความ)
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">สรุปผลการรัน — 10 VUs, 12 วินาที, 1,155 คำขอ</span>
+      </div>
+      <pre><code>data_received..................: 213 kB   17 kB/s
+data_sent......................: 91 kB    7.4 kB/s
+http_req_blocked...............: avg=0.02ms   min=0.00ms   med=0.01ms   max=2.82ms   p(90)=0.01ms   p(95)=0.02ms
+http_req_connecting............: avg=0.01ms   min=0.00ms   med=0.00ms   max=1.30ms   p(90)=0.00ms   p(95)=0.00ms
+http_req_duration..............: avg=54.25ms  min=4.21ms   med=44.40ms  max=584.70ms p(90)=65.31ms  p(95)=74.53ms
+http_req_failed................: 0.00%     ล้มเหลว 0 จาก 1,155
+http_req_receiving.............: avg=0.17ms   min=0.01ms   med=0.06ms   max=45.10ms  p(90)=0.18ms   p(95)=0.32ms
+http_req_sending...............: avg=0.05ms   min=0.00ms   med=0.02ms   max=10.77ms  p(90)=0.06ms   p(95)=0.11ms
+http_req_tls_handshaking.......: avg=0.00ms   min=0.00ms   med=0.00ms   max=0.00ms   p(90)=0.00ms   p(95)=0.00ms
+http_req_waiting...............: avg=54.03ms  min=4.10ms   med=44.34ms  max=584.64ms p(90)=65.02ms  p(95)=74.08ms
+http_reqs......................: 1,155    93.44/s
+iteration_duration.............: avg=105.39ms min=54.43ms  med=95.40ms  max=634.81ms p(90)=117.67ms p(95)=127.39ms
+iterations.....................: 1,155    93.44/s
+vus............................: 10       min=10      max=10
+vus_max........................: 10       min=10      max=10
+
+running (12.4s), 0/10 VUs, 1,155 complete and 0 interrupted iterations</code></pre>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> ทุกค่าคำนวณจากไฟล์ดิบ
+      <code>docs/evidence/k6-csv-raw-sample.csv</code> จากการรัน k6 v2.2.0 ในเครื่อง
+      10 VUs นาน 12 วินาที บรรทัดสุดท้าย 12.4 วินาที คือ
+      <span class="key-figure">12.36</span> วินาทีที่ k6 ปัด บรรทัด <code>checks</code> และ THRESHOLDS
+      ไม่ปรากฏ เพราะสคริปต์ไม่ได้เขียน check และไม่ได้ตั้งเกณฑ์
+    </p>
+
+    <h3 id="read-aloud">อ่านบล็อกนี้ใน 30 วินาที</h3>
+
+    <ol class="steps">
+      <li>บรรทัด <code>running</code> บอกว่า <code>1,155 complete and 0 interrupted</code> — การรันสมบูรณ์ ไม่มีรอบใดถูกตัด</li>
+      <li><code>http_req_failed 0.00%</code> — ไม่มีคำขอใดล้มเหลว ตัวเลขที่เหลือเชื่อถือได้</li>
+      <li><code>http_reqs 93.44/s</code> — throughput ของการรันนี้</li>
+      <li><code>http_req_duration avg 54.25ms p(95) 74.53ms</code> — ผู้ใช้ส่วนใหญ่รอราว 54 ms และ 5% รอเกิน 74 ms</li>
+      <li><code>http_req_waiting avg 54.03ms</code> เทียบกับ duration 54.25 ms — เวลาเกือบทั้งหมดหมดไปกับการรอเซิร์ฟเวอร์</li>
+      <li><code>iteration_duration avg 105.39ms</code> เทียบกับ 54.25 ms — อีกครึ่งหนึ่งของเวลาคือ think time ตามที่ตั้งไว้</li>
+      <li><code>vus 10 min=10 max=10</code> — k6 สร้าง VU ได้ครบตามที่ขอ ไม่ได้เป็นคอขวดเอง</li>
+    </ol>
+
+    <h2 id="export">ส่งออกผลไปทำกราฟต่อ</h2>
+
+    <p>
+      หน้าจอสรุปไม่พอเมื่อต้องเทียบหลายรอบ ต้องส่งออกข้อมูลดิบแล้วคำนวณเอง
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">คำสั่งส่งออกผลในรูปแบบต่าง ๆ</span>
+      </div>
+      <pre><code># 1) สรุปผลแบบสั้น สำหรับอ่านบนหน้าจอหรือบันทึกในบันทึกการรัน
+k6 run --summary-mode compact -e BASE_URL=http://localhost:8080 load.js
+
+# 2) สรุปผลเป็นไฟล์ JSON เพื่อเทียบระหว่างรอบด้วยสคริปต์
+k6 run --summary-export=summary.json load.js
+
+# 3) ข้อมูลดิบรายคำขอเป็น CSV เปิดในสเปรดชีตได้ทันที
+k6 run -o csv=raw.csv load.js
+
+# 4) ข้อมูลดิบเป็น JSON พร้อม tags ครบ สำหรับวิเคราะห์เชิงลึก
+k6 run -o json=raw.json load.js</code></pre>
+    </div>
+
+    <p>
+      ไฟล์ CSV มีหนึ่งบรรทัดต่อหนึ่งค่าที่วัดได้ จึงสร้างฮิสโตแกรมได้ตรงไปตรงมา
+    </p>
+
+    <h2 id="summary-trend-stats">วิธีที่สาม: ขอให้ k6 แสดง p99 บนหน้าจอ</h2>
+
+    <p>
+      ตัวเลือกที่เปลี่ยน <strong>สิ่งที่พิมพ์บนหน้าจอสรุปผล</strong> ชื่อ <code>--summary-trend-stats</code>
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">ขอให้ k6 แสดง p50, p99 และ p99.9 เพิ่ม</span>
+      </div>
+      <pre><code>k6 run --summary-trend-stats="avg,min,med,max,p(50),p(90),p(95),p(99),p(99.9)" k6/smoke.js</code></pre>
+    </div>
+
+    <p>
+      ค่าเริ่มต้นของ k6 คือ <code>avg, min, med, max, p(90), p(95)</code> ซึ่งไม่มี
+      <code>p99</code> และไม่มี <code>p50</code> เมื่อใส่ตัวเลือกนี้บรรทัด
+      <code>http_req_duration</code> จะเปลี่ยนไปดังนี้
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">เทียบบรรทัด http_req_duration ก่อนและหลังใส่ตัวเลือก</span>
+      </div>
+      <pre><code># ก่อน — ค่าเริ่มต้น ไม่มี p(50) และไม่มี p(99)
+http_req_duration..............: avg=35.09ms min=7.15ms med=37.68ms max=47.94ms p(90)=46.35ms p(95)=46.91ms
+
+# หลัง — มี p(50), p(99) และ p(99.9) เพิ่ม
+http_req_duration..............: avg=30.55ms min=8.7ms med=32.73ms max=49.58ms p(50)=32.73ms p(90)=42.94ms p(95)=44.84ms p(99)=47.79ms p(99.9)=49.4ms</code></pre>
+    </div>
+
+    <p class="source-note">
+      <strong>ที่มา:</strong> การรันจริงสองครั้งบน k6 v2.2.0 ด้วย <code>k6/smoke.js</code>
+      (2 VU, 20 วินาที) สิ่งที่ควรดูคือชุดสถิติที่ปรากฏ ไม่ใช่ค่าตัวเลข ผลดิบอยู่ที่ <code>docs/evidence/k6-summary-trend-stats.txt</code>
+    </p>
+
+    <ul>
+      <li>
+        <strong>มันเปลี่ยนแค่สิ่งที่พิมพ์ ไม่ได้เปลี่ยนวิธีคำนวณ</strong> สถิติเดิมเท่าเดิม</li>
+      <li>
+        <strong>มันมีผลกับทุก Trend metric ไม่ใช่เฉพาะ <code>http_req_duration</code></strong>
+        <code>iteration_duration</code> ได้สถิติชุดเดียวกัน
+      </li>
+      <li>
+        <strong>มันไม่เปลี่ยนผลการตัดสิน threshold</strong>
+      </li>
+    </ul>
+
+    <h3 id="which-export">เลือกวิธีไหน</h3>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เทียบตัวเลือกการนำผลออกทั้งสี่แบบ</caption>
+        <thead>
+          <tr>
+            <th class="wrap">ตัวเลือก</th>
+            <th class="wrap">เปลี่ยนอะไร</th>
+            <th class="wrap">ได้ p99 ไหม</th>
+            <th class="wrap">เหมาะเมื่อ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">(ไม่ใส่)</td>
+            <td class="wrap">–</td>
+            <td class="wrap">ไม่ได้</td>
+            <td class="wrap">ดูผลเร็ว ๆ ระหว่างพัฒนา</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">--summary-trend-stats</td>
+            <td class="wrap">สิ่งที่พิมพ์บนหน้าจอสรุป</td>
+            <td class="wrap">ได้ บนหน้าจอ</td>
+            <td class="wrap">อยากเห็น p99 ทันทีโดยไม่ต้องเก็บไฟล์</td>
+          </tr>
+          <tr>
+            <td class="code-cell">--summary-export=ไฟล์</td>
+            <td class="wrap">เขียนสรุปผลเป็นไฟล์ JSON (หน้าจอไม่เปลี่ยน)</td>
+            <td class="wrap">ได้ ถ้าใส่ <code>--summary-trend-stats</code> ควบไปด้วย</td>
+            <td class="wrap">ต้องเทียบหลายรอบด้วยสคริปต์</td>
+          </tr>
+          <tr>
+            <td class="code-cell">-o csv / -o json</td>
+            <td class="wrap">ส่งข้อมูล<strong>รายคำขอ</strong>ออกเป็นไฟล์</td>
+            <td class="wrap">ได้ แต่ต้องคำนวณเอง</td>
+            <td class="wrap">ต้องวิเคราะห์เชิงลึก เลือกช่วงเวลา หรือกรอง tag เอง</td>
+          </tr>
+          <tr>
+            <td class="code-cell">threshold ที่อ้าง p(99)</td>
+            <td class="wrap">ผลการตัดสินผ่าน/ไม่ผ่าน (ค่าปรากฏในบล็อก THRESHOLDS)</td>
+            <td class="wrap">ได้ และผูกกับการตัดสิน</td>
+            <td class="wrap">ต้องให้ไปป์ไลน์ตัดสินด้วย p99 ไม่ใช่แค่รายงาน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="always-smoke">ทำ smoke test ก่อนเสมอ</h2>
+
+    <p>
+      ขั้นตอนนี้ใช้เวลาไม่ถึงครึ่งนาที แต่ประหยัดเวลาได้เป็นชั่วโมง เมื่อพบตอนนาทีที่สิบว่า
+      ลืมใส่ header ยืนยันตัวตน
+    </p>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">รัน smoke test ก่อนทุกครั้ง</span>
+      </div>
+      <pre><code># ยืนยันว่าปลายทางตอบและสคริปต์ถูก — 10 วินาทีก็พอ
+k6 run -e BASE_URL=http://localhost:8080 examples/smoke.js
+
+# ถ้าผ่าน จึงค่อยรันการทดสอบจริง
+k6 run -e BASE_URL=http://localhost:8080 examples/load.js</code></pre>
+    </div>
+
+    <ul>
+      <li>URL หรือพาธผิด ได้ 404 ทุกคำขอ</li>
+      <li>ลืม header ยืนยันตัวตน ได้ 401 ทุกคำขอ</li>
+      <li>ปลายทางไม่ทำงาน หรือรัน mock server คนละพอร์ต</li>
+      <li>ไวยากรณ์ใน <code>check()</code> ผิด หรือเรียกค่าจาก response ที่ไม่มีอยู่จริง</li>
+    </ul>
+
+    <h3 id="smoke-tuning">ทำไม smoke จึงไม่ควรใช้เกณฑ์เดียวกับ load test</h3>
+
+    <p>
+      ตอนแรก <code>smoke.js</code> ตั้ง <code>vus: 1, duration: '10s'</code> และใช้เกณฑ์เดียวกับ
+      load test คือ <code>p(95)&lt;500</code> กับ <code>checks&gt;0.99</code> ผลคือ
+      **รัน 37 ครั้ง ไม่ผ่าน 6 ครั้ง (<span class="key-figure">16%</span>)**
+    </p>
+
+    <p>
+      สาเหตุข้อแรกคือ <strong>จำนวนตัวอย่างน้อยเกินไป</strong>
+      1 VU กับ <code>sleep(1)</code> ใน 10 วินาที เก็บได้ราว 9 รอบ = 27 ข้อตรวจ เมื่อ check
+      ตก 1 ข้อ อัตรากลายเป็น 26/27 = 96.3% ต่ำกว่าเกณฑ์ 99% ทันที และ <code>p(95)</code>
+      ของชุดเล็กคือค่าที่สองจากท้าย
+    </p>
+
+    <p>
+      ข้อที่สองคือ <strong>ปลายทางจำลองมีหางยาวปนอยู่</strong> mock server ของโปรเจกต์เคย
+      เปิดหางยาว 3% ไว้ตลอด (บางคำขอช้าลง <span class="key-figure">150–570</span> ms)
+      ขัดกับเกณฑ์ที่บังคับให้ทุกคำขอเร็ว
+    </p>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">mock server ในโปรเจกต์นี้มีสองโหมดบทบาท</span>
+      </div>
+      <ul>
+        <li>
+          <strong>โหมดประพฤติดี (ค่าเริ่มต้น)</strong> —
+          <code>node mock-server/server.mjs</code> ตอบทุกคำขอในราว 6–46 ms
+          ไม่มีหางยาว ใช้เป็นปลายทางอ้างอิงที่มั่นคงสำหรับชุดทดสอบทั้งหมด
+        </li>
+        <li>
+          <strong>โหมดหางยาว</strong> —
+          <code>TAIL_RATE=0.03 node mock-server/server.mjs</code> ทำให้ 3% ของคำขอ
+          ช้าลง 150–570 ms ใช้เมื่อต้องการสาธิตว่าเปอร์เซ็นไทล์ตอบสนองต่อหางยาวอย่างไร
+          <strong>อย่าใช้ปลายทางในโหมดนี้เป็นตัวกั้นชุดทดสอบ</strong>
+          เพราะเกณฑ์ของสคริปต์ตั้งไว้สำหรับปลายทางที่ประพฤติดี
+        </li>
+      </ul>
+      <p>
+        ตรวจได้ว่าตอนนี้อยู่โหมดใดด้วย <code>curl -s http://localhost:8080/health</code>
+        แล้วดูค่า <code>tailRate</code> (0 = โหมดประพฤติดี)
+      </p>
+    </div>
+
+    <p>
+      ทางแก้คือแยกหน้าที่ให้ชัด <strong>smoke ไม่ได้ตัดสิน SLO</strong> คำถามเดียวคือ
+      "สคริปต์กับปลายทางยังทำงานไหม"
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>สิ่งที่แก้ใน smoke test และเหตุผล</caption>
+        <thead>
+          <tr>
+            <th class="wrap">แก้เป็น</th>
+            <th class="wrap">เหตุผล</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">vus: 2<br>duration: '20s'</td>
+            <td class="wrap">ได้ราว 40 รอบ = 120 ข้อตรวจ ทำให้ทั้ง <code>p(95)</code> และอัตรา check มีความหมายในระดับของ smoke และ check ที่ตก 1 ข้อไม่ทำให้ทั้งชุดล้มทันที</td>
+          </tr>
+          <tr>
+            <td class="code-cell">p(95)&lt;1000</td>
+            <td class="wrap">เป็น "เพดานสุขภาพ" ที่ตรวจว่า "ตอบได้ไหม" ไม่ใช่เกณฑ์ SLO ส่วนเกณฑ์ 500 ms ยังอยู่ที่ <code>load.js</code> และ <code>soak.js</code></td>
+          </tr>
+          <tr>
+            <td class="code-cell">mock server ปิดหางยาวเป็นค่าเริ่มต้น</td>
+            <td class="wrap">ให้ smoke และ load ใช้ปลายทางที่คาดเดาได้ และเปิดหางยาวเฉพาะเมื่อต้องการสอนเรื่องเปอร์เซ็นไทล์</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      หลังแก้แล้ว รัน <code>k6 run k6/smoke.js</code> ซ้ำ 30 ครั้งผ่านทั้งหมด 30/30 ครั้งที่ 25
+      เครื่องหยุดชะงักจน <code>p(95)</code> ถึง <span class="key-figure">465</span> ms แต่ยังผ่าน เพราะเพดาน
+      1000 ms ถ้าใช้เกณฑ์ 500 ms จะล้มทันที ผลดิบอยู่ที่ <code>docs/evidence/k6-smoke-repeatability.txt</code>
+    </p>
+
+    <p>
+      <strong>หลักที่ควรจำ:</strong> ถ้าปลายทางมีหางยาวจริง อย่ารันซ้ำจนกว่าจะผ่าน ให้ผ่อน
+      เกณฑ์ smoke ให้สะท้อนพฤติกรรมจริง แล้วเก็บเกณฑ์ SLO ไว้ใน load test
+    </p>
+
+    <h2 id="ethics">จริยธรรมและความปลอดภัยในการทดสอบโหลด</h2>
+
+    <p>
+      โหลดเทสต์คือการยิงคำขอจำนวนมากด้วยความเร็วสูง เครื่องมือเดียวกันใช้โจมตีระบบได้
+      ผลต่อปลายทางเหมือนกัน ต่างแค่เจตนาและสิทธิ์
+    </p>
+
+    <div class="callout callout--danger">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        <span class="label">หลักที่ต้องยึด</span>
+      </div>
+      <ol>
+        <li><strong>ยิงเฉพาะระบบที่เราได้รับอนุญาตให้ทดสอบ</strong> การทดสอบระบบของผู้อื่นโดยไม่ได้รับอนุญาตเข้าข่ายการโจมตีและอาจผิดกฎหมาย</li>
+        <li><strong>เลือกใช้สภาพแวดล้อมทดสอบก่อนเสมอ</strong> ไม่ใช่ระบบที่ผู้ใช้จริงกำลังใช้งานอยู่</li>
+        <li><strong>ตกลงขอบเขตและช่วงเวลาล่วงหน้า</strong> กับผู้ดูแลระบบปลายทาง เพราะโหลดเทสต์อาจกระทบผู้ใช้ร่วมระบบ</li>
+        <li><strong>เริ่มจากเล็กเสมอ</strong> ใช้ smoke test ก่อน แล้วค่อยเพิ่มภาระ เพื่อไม่ให้เกิดภาระกระชากที่ไม่ได้ตั้งใจ</li>
+        <li><strong>เตรียมวิธีหยุดฉุกเฉินไว้</strong> รู้ว่าต้องกดอะไรเพื่อหยุดกลางทาง และรู้ว่าใครต้องแจ้งเมื่อเกิดปัญหา</li>
+        <li><strong>ระวังข้อมูลส่วนบุคคล</strong> อย่าใช้ข้อมูลผู้ใช้จริงในสคริปต์ทดสอบ และอย่าเก็บผลลัพธ์ที่มีข้อมูลอ่อนไหวไว้โดยไม่ป้องกัน</li>
+      </ol>
+    </div>
+
+    <p>
+      ตัวอย่างทุกตัวจึงชี้ไปที่ <code>http://localhost:8080</code> หรือ
+      <code>https://test.k6.io</code> ที่ผู้พัฒนา k6 สร้างเพื่อการทดสอบ สคริปต์ยังตรวจปลายทาง
+      ก่อนรัน ถ้าไม่อยู่ในรายการที่อนุญาตจะหยุดทันที
+    </p>
+
+    <h2 id="summary">สรุปบทที่ 6</h2>
+
+    <ul>
+      <li>อ่าน <code>running (…)</code> ก่อน ถ้าการรันไม่สมบูรณ์ ตัวเลขที่เหลือไม่มีความหมาย</li>
+      <li>THRESHOLDS กำหนด exit code 99</li>
+      <li>ผลของ <code>check()</code> ไม่ทำให้การรันล้มเหลวถ้าไม่มี threshold คุม <code>checks</code></li>
+      <li>อ่านอัตราความผิดพลาดก่อนเวลา ระวังกับดัก 4xx</li>
+      <li>p99 มาจาก <code>--summary-trend-stats</code>, threshold p99 หรือข้อมูลดิบ</li>
+      <li><code>--summary-trend-stats</code> · <code>--summary-export</code> · <code>-o csv=</code> คนละชั้นกัน</li>
+      <li>รัน smoke ก่อน และยิงโหลดเฉพาะระบบที่อนุญาต</li>
+    </ul>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M6.9 10.2l2.1 2.1 4.1-4.4"/></svg>
+        <span class="label">จบบทเรียนทั้งหกบทแล้ว</span>
+      </div>
+      <p>
+        ต่อไปให้ทำ <a href="../quiz.html">แบบทดสอบท้ายบท</a> เพื่อยืนยันความเข้าใจ
+        ดูคะแนนรวมได้ที่หน้า <a href="../progress.html">ความคืบหน้า</a>
+        และถ้าเจออาการที่อ่านผลไม่ออก ให้เปิด
+        <a href="../troubleshooting.html">หน้าปัญหาที่พบบ่อย</a> ซึ่งแยกอาการและสาเหตุไว้ให้แล้ว
+      </p>
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/site.js"></script>
+
+</body>
+</html>

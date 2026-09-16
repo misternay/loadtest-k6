@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บทที่ 5 — รูปแบบการทดสอบและโหลดโปรไฟล์ | Load Testing ด้วย k6</title>
+<meta name="description" content="เทียบรูปแบบการทดสอบ smoke load stress spike soak breakpoint อธิบาย ramp-up, steady state, warm-up, think time กับ pacing, จุดอิ่มตัว และวิธีแปลง SLO เป็น threshold ของ k6">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="../assets/css/main.css">
+</head>
+<body data-page="05-load-profiles" data-root="../">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูนำทางและสารบัญในหน้านี้สร้างด้วย JavaScript กรุณาเปิด JavaScript เพื่อใช้งานเมนู
+    เนื้อหาบทเรียนยังอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M3.4 14.2a7 7 0 1 1 13.2 0"/><path d="M10 11.4l3.4-3.6"/></svg>
+      บทที่ 5 จาก 6
+    </p>
+
+    <h1>เลือกรูปแบบการทดสอบให้ตรงกับคำถามที่ต้องตอบ</h1>
+
+    <p class="lede">
+      รูปแบบการทดสอบไม่ใช่เรื่องของรสนิยม แต่เป็นการเลือกว่าจะถามคำถามอะไรกับระบบ
+    </p>
+
+    <div class="section-meta">
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 6.2V10l2.6 1.6"/></svg>
+        ใช้เวลาอ่านประมาณ 19 นาที
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.2l6 2.2v4.4c0 3.3-2.4 5.9-6 7-3.6-1.1-6-3.7-6-7V5.4z"/></svg>
+        ต้องอ่านก่อน: <a href="02-vu.html">บทที่ 2</a>, <a href="04-percentiles.html">บทที่ 4</a>
+      </div>
+      <div>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.4 4.4h11.2L10 10l5.6 5.6H4.4"/></svg>
+        สคริปต์จริง: <a href="../examples.html">ตัวอย่างทั้ง 5 แบบ</a>
+      </div>
+    </div>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>แต่ละรูปแบบตอบคำถามคนละข้อ — smoke ตรวจว่าสคริปต์และปลายทางยังทำงาน, load ยืนยันที่ภาวะเป้าหมาย, stress หาจุดอิ่มตัว, spike ดูการรับภาระกระชากและการฟื้นตัว, soak ดูการสะสมตามเวลา, breakpoint หาความจุสูงสุด</li>
+        <li>ข้อมูลช่วงอุ่นเครื่องยังถูกนับรวมในสรุปท้ายการรันเสมอ ช่วงภาวะคงตัวจึงเป็นช่วงเดียวที่ตัวเลขนำไปตัดสินผลได้</li>
+        <li>การแยกช่วงภาวะคงตัวเป็น scenario ของตัวเองแล้วอ้างแท็ก <code>scenario</code> ให้ตัวเลขที่สะอาดจริง ส่วน <code>delayAbortEval</code> เพียงเลื่อนเวลาที่ k6 จะตัดสินใจหยุด</li>
+        <li>SLO ที่เขียนให้วัดได้แปลงเป็น threshold ได้ตรงตัว และควรตั้ง <code>abortOnFail</code> เฉพาะเกณฑ์ที่แปลว่าระบบกำลังพัง</li>
+      </ol>
+    </div>
+
+    <h2 id="types">รูปแบบการทดสอบทั้งหกแบบ</h2>
+
+    <p>
+      เริ่มจาก smoke เสมอ แล้วไล่ตามคำถามที่โตขึ้น
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เทียบรูปแบบการทดสอบทั้งหกแบบ</caption>
+        <thead>
+          <tr>
+            <th>รูปแบบ</th>
+            <th class="wrap">คำถามที่ตอบ</th>
+            <th class="wrap">ตั้งค่าอย่างไร</th>
+            <th class="wrap">สิ่งที่ได้เรียนรู้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="code-cell">smoke</td>
+            <td class="wrap">สคริปต์ถูกไหม ปลายทางยังตอบอยู่ไหม</td>
+            <td class="wrap">2 VU นาน 20–30 วินาที ใช้เกณฑ์แบบ "เพดานสุขภาพ" ไม่ใช่เกณฑ์ SLO</td>
+            <td class="wrap">ข้อผิดพลาดพื้นฐานทั้งหมด เช่น URL ผิด ลืม header หรือ check ที่ไม่มีทางผ่าน</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="code-cell">load</td>
+            <td class="wrap">ที่ภาวะใช้งานตามที่คาดไว้ ระบบยังทำได้ตามสัญญาไหม</td>
+            <td class="wrap">ไต่ขึ้นถึงระดับเป้าหมาย แล้วถือไว้ 5–20 นาที</td>
+            <td class="wrap">ตัวเลข p95 และอัตราความผิดพลาดที่ภาวะเป้าหมาย ใช้ยืนยันก่อนเปิดตัว</td>
+          </tr>
+          <tr>
+            <td class="code-cell">stress</td>
+            <td class="wrap">จุดอิ่มตัวอยู่ตรงไหน และพังแบบไหน</td>
+            <td class="wrap">ไต่ขึ้นเป็นขั้นจนเกินภาวะปกติ 2–4 เท่า</td>
+            <td class="wrap">จำนวนผู้ใช้สูงสุดที่รับได้ และรูปแบบการพัง เช่นตอบ 503 หรือเริ่มหมดเวลา</td>
+          </tr>
+          <tr>
+            <td class="code-cell">spike</td>
+            <td class="wrap">รับภาระที่กระโดดขึ้นกะทันหันได้ไหม และฟื้นตัวเร็วแค่ไหน</td>
+            <td class="wrap">กระชากขึ้นใน 10–30 วินาที ถือสั้น ๆ แล้วลดลง</td>
+            <td class="wrap">พฤติกรรมการต่อคิว การทิ้งคำขอ และเวลาที่ latency กลับสู่ระดับเดิม</td>
+          </tr>
+          <tr>
+            <td class="code-cell">soak</td>
+            <td class="wrap">ทนยาวไหม มีอะไรสะสมขึ้นตามเวลา</td>
+            <td class="wrap">ถือภาวะปกติต่อเนื่อง 1–4 ชั่วโมงขึ้นไป</td>
+            <td class="wrap">รอยรั่วหน่วยความจำ connection ที่ไม่ถูกคืน และการเสื่อมสภาพทีละน้อย</td>
+          </tr>
+          <tr>
+            <td class="code-cell">breakpoint</td>
+            <td class="wrap">ความจุสูงสุดที่ยอมรับได้คือเท่าไร</td>
+            <td class="wrap">เพิ่มขึ้นเป็นขั้นละ 10–20% จนตัวชี้วัดเริ่มผิดเกณฑ์</td>
+            <td class="wrap">ตัวเลขความจุที่อ้างอิงได้ พร้อมเหตุผลว่าอะไรคือคอขวดที่แท้จริง</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">ลำดับการรันที่แนะนำ</span>
+      </div>
+      <p>
+        smoke → load → stress → soak สำหรับงานประจำ เพิ่ม spike กับ breakpoint
+        เมื่อสถาปัตยกรรมเปลี่ยนหรือเตรียมรับทราฟฟิกก้อนใหญ่
+        การข้าม smoke ไปรัน load ทันทีทำให้เสียเวลามากที่สุด เพราะถ้าสคริปต์ผิด
+        จะได้ข้อมูลที่ตีความไม่ได้
+      </p>
+    </div>
+
+    <h2 id="stages">ช่วงต่าง ๆ ของการรัน และช่วงที่ข้อมูลมีความหมาย</h2>
+
+    <p>การรันที่ดีมีสี่ช่วง แต่ละช่วงมีบทบาทต่างกัน</p>
+
+    <ol class="steps">
+      <li>
+        <strong>ช่วงอุ่นเครื่อง</strong> ระบบยังคอมไพล์โค้ด เติม cache ข้อมูลช่วงนี้
+        ช้ากว่าความจริงและไม่ควรนำไปตัดสินอะไร
+      </li>
+      <li>
+        <strong>ช่วงไต่ขึ้น</strong> จำนวนผู้ใช้เพิ่มทีละขั้น เห็นได้ว่าระบบเริ่มตึงที่จุดไหน
+      </li>
+      <li>
+        <strong>ช่วงภาวะคงตัว</strong> จำนวนผู้ใช้คงที่ เป็นช่วงเดียวที่ข้อมูลมีความหมาย
+        ควรยาวพอที่จะเก็บข้อมูลได้อย่างน้อยหลายพันคำขอ
+      </li>
+      <li>
+        <strong>ช่วงผ่อนลง</strong> ลดผู้ใช้เป็นขั้นตอนเพื่อให้คำขอที่ค้างอยู่ทำงานจนจบ
+      </li>
+    </ol>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">stages ที่มีครบทั้งสี่ช่วง</span>
+      </div>
+      <pre><code>export const options = {
+  scenarios: {
+    load: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { duration: '1m',  target: 3  },   // ช่วงอุ่นเครื่อง — ยังไม่ต้องอ่านค่า
+        { duration: '2m',  target: 6  },   // ช่วงไต่ขึ้น
+        { duration: '5m',  target: 10 },   // ภาวะคงตัว เริ่มนับข้อมูลจริง
+        { duration: '3m',  target: 10 },   // ต่ออีก 3 นาที เพื่อยืนยันว่าเสถียร
+        { duration: '1m',  target: 0  },   // ช่วงผ่อนลง
+      ],
+      gracefulRampDown: '30s',
+    },
+  },
+  thresholds: {
+    http_req_duration: [{
+      threshold: 'p(95)<500',      // เกณฑ์ SLO ของระดับโหลดนี้
+      abortOnFail: true,           // ถ้าไม่ผ่าน ให้หยุดการรันก่อนเวลาที่เหลือ
+      delayAbortEval: '180s',      // แต่ยังไม่ต้องตัดสินใจหยุดใน 3 นาทีแรก
+    }],
+    http_req_failed: ['rate<0.01'],
+  },
+};</code></pre>
+    </div>
+
+    <p>
+      <code>delayAbortEval</code> เป็นชื่อตัวเลือกที่ถูกต้องของ k6 v2.2.0
+      (คู่กับ <code>abortOnFail: true</code> ในรูปแบบยาว) มันทำอย่างเดียวคือ
+      <strong>เลื่อนเวลาที่ k6 จะตัดสินใจหยุดการรัน</strong> นับเป็นวินาทีจากเริ่มการรัน
+    </p>
+
+    <p>
+      <strong>สิ่งที่ <code>delayAbortEval</code> ไม่ได้ทำ</strong> คือตัดข้อมูลช่วงอุ่นเครื่อง
+      ออกจากการคำนวณค่า threshold ค่า <code>p(95)</code> ที่ k6 รายงานท้ายการรัน
+      ในการรันจริง ที่ตั้ง
+      <span class="key-figure">20.1 วินาที</span>กับที่ไม่ได้ตั้ง รายงาน <code>p(95)</code>
+      <span class="key-figure">603.32 ms</span> กับ <span class="key-figure">602.49 ms</span>
+      เท่ากันในทางปฏิบัติ ทั้งที่ 10 วินาทีแรกของทั้งสองรันถูกทำให้ตอบช้า 600 ms
+      ถ้ากรองข้อมูลได้ ค่าของรันที่ตั้งไว้ต้องเหลือราว 25–45 ms
+      ผลดิบอยู่ใน <code>docs/evidence/k6-delay-abort-eval.txt</code>
+    </p>
+
+    <h3 id="steady-only">ถ้าต้องการตัดสินเฉพาะช่วงภาวะคงตัวจริง ๆ</h3>
+
+    <p>
+      ต้องแยกข้อมูล ไม่ใช่เลื่อนเวลา มีสามวิธีที่ได้ผล
+    </p>
+
+    <ol>
+      <li>
+        <strong>แยกช่วงภาวะคงตัวเป็น scenario ของตัวเอง</strong> แล้วตั้ง threshold
+        อ้างแท็ก <code>scenario</code> — k6 คิดเปอร์เซ็นไทล์จากเฉพาะตัวอย่างของ scenario
+        นั้น (ตรวจแล้วว่าได้ผลจริง, exit code 0)
+      </li>
+      <li>
+        <strong>รันช่วงภาวะคงตัวเป็นการรันแยกต่างหาก</strong> แล้วอ่านผลเฉพาะการรันนั้น
+      </li>
+      <li>
+        <strong>ส่งออกข้อมูลดิบแล้วเลือกช่วงเวลาเอง</strong> ด้วย
+        <code>-o csv=raw.csv</code> แล้วตัดช่วงอุ่นเครื่องออกก่อนคำนวณ
+      </li>
+    </ol>
+
+    <div class="code-block">
+      <div class="code-block__head">
+        <span class="code-block__title">วิธีที่ 1 — แยก scenario แล้วตั้ง threshold อ้างแท็ก scenario</span>
+      </div>
+      <pre><code>export const options = {
+  scenarios: {
+    // ช่วงอุ่นเครื่อง: ไม่มีใครนำตัวเลขช่วงนี้ไปตัดสิน
+    warmup: { executor: 'constant-vus', vus: 2, duration: '2m', exec: 'warmup', startTime: '0s' },
+    // ช่วงภาวะคงตัว: เริ่มหลังช่วงอุ่นเครื่องจบ
+    steady: { executor: 'constant-vus', vus: 10, duration: '10m', exec: 'steady', startTime: '2m' },
+  },
+  thresholds: {
+    // อ้างแท็ก scenario เพื่อให้คิดจากเฉพาะตัวอย่างของ scenario นั้น
+    'http_req_duration{scenario:steady}': ['p(95)&lt;500', 'p(99)&lt;1500'],
+  },
+};
+
+export function warmup() { /* ยิงคำขอแบบเดียวกับ steady */ }
+export function steady() { /* ยิงคำขอที่จะใช้ตัดสิน SLO */ }</code></pre>
+    </div>
+
+    <p>
+      การแยก scenario ทำให้ตัวเลขที่ใช้อ้างอิงสะอาดจริง ส่วน <code>delayAbortEval</code>
+      ให้ผลแค่ "ไม่หยุดเร็วเกินไป" โดยตัวเลขที่รายงานยังรวมทุกอย่าง
+    </p>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ข้อมูลช่วงอุ่นเครื่องไม่ได้ถูกตัดออกให้</span>
+      </div>
+      <p>
+        k6 นำทุกคำขอรวมช่วงอุ่นเครื่องไปคำนวณในสรุปท้ายการรัน ถ้าการรันสั้นมาก เช่น 30 วินาที
+        ช่วงอุ่นเครื่องอาจกินไปครึ่งหนึ่งของทั้งหมด การรันที่ตั้งใจวัดผลจริงจึงควรยาวอย่างน้อย 5–10 นาที
+        เพื่อให้ช่วงที่มีความหมายกินสัดส่วนมากพอ
+      </p>
+    </div>
+
+    <h2 id="think-time-pacing">think time กับ pacing ต่างกันอย่างไร</h2>
+
+    <p>
+      ทั้งสองอย่างทำให้รอบถัดไปเริ่มช้าลง แต่กลไกต่างกัน
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>เปรียบเทียบ think time และ pacing</caption>
+        <thead>
+          <tr>
+            <th class="wrap">ประเด็น</th>
+            <th class="wrap">think time (sleep)</th>
+            <th class="wrap">pacing</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">กลไก</td>
+            <td class="wrap">หยุดรอเป็นเวลาคงที่ทุกครั้ง</td>
+            <td class="wrap">คำนวณว่าเหลือเวลาอีกเท่าไรจากเป้าต่อรอบ แล้วรอเฉพาะส่วนที่เหลือ</td>
+          </tr>
+          <tr>
+            <td class="wrap">เมื่อระบบตอบช้าลง</td>
+            <td class="wrap">รอบถัดไปเริ่มช้าลงตามระบบ รวม sleep เข้าไปอีก → รอบยาวขึ้นเรื่อย ๆ</td>
+            <td class="wrap">เวลารอหดลงเพื่อชดเชย ทำให้จังหวะต่อรอบคงที่</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="wrap">จำนวนคำขอต่อชั่วโมง</td>
+            <td class="wrap">แปรผันตามความเร็วของระบบ</td>
+            <td class="wrap">คงที่ตามที่กำหนด</td>
+          </tr>
+          <tr>
+            <td class="wrap">เหมาะกับ</td>
+            <td class="wrap">การเลียนแบบพฤติกรรมผู้ใช้ที่อ่านหน้าจอ</td>
+            <td class="wrap">การทดสอบที่ต้องคุมจำนวนคำขอต่อชั่วโมงให้แน่นอน</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      think time คงที่ทำให้จำนวนคำขอต่อชั่วโมงแปรผันตามความเร็วของระบบ
+      เป็นพฤติกรรมของแบบจำลองปิด
+    </p>
+
+    <h3 id="open-closed">เลือกแบบจำลองให้ตรงกับความจริงที่ต้องเจอ</h3>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>แบบจำลองปิดและแบบจำลองเปิด</caption>
+        <thead>
+          <tr>
+            <th class="wrap">ประเด็น</th>
+            <th class="wrap">แบบจำลองปิด (closed)</th>
+            <th class="wrap">แบบจำลองเปิด (open)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">สิ่งที่ถูกตรึง</td>
+            <td class="wrap">จำนวนผู้ใช้</td>
+            <td class="wrap">อัตราการเกิดงานต่อวินาที</td>
+          </tr>
+          <tr>
+            <td class="wrap">executor</td>
+            <td class="wrap">constant-vus, ramping-vus, shared-iterations, per-vu-iterations</td>
+            <td class="wrap">constant-arrival-rate, ramping-arrival-rate</td>
+          </tr>
+          <tr>
+            <td class="wrap">เมื่อระบบช้าลง</td>
+            <td class="wrap">ภาระที่ยิงเข้าลดลงเอง</td>
+            <td class="wrap">ภาระคงเดิม แล้วคิวจะยาวขึ้น หรือทิ้งงานถ้า VU ไม่พอ</td>
+          </tr>
+          <tr class="row-accent">
+            <td class="wrap">สมจริงกับ</td>
+            <td class="wrap">ระบบปิด เช่นพนักงานในองค์กรที่แต่ละคนทำงานเป็นคิว</td>
+            <td class="wrap">ทราฟฟิกจากผู้ใช้ภายนอก ที่เข้ามาไม่สนใจว่าเราพร้อมไหม</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      สำหรับการยืนยันก่อนเปิดตัว แบบจำลองเปิดตอบได้ตรงกว่า เพราะทราฟฟิกจริงเข้ามาไม่หยุด
+      ส่วนแบบจำลองปิดเหมาะกว่าเมื่อต้องเปรียบเทียบผลระหว่างการรันหลายครั้ง
+    </p>
+
+    <h2 id="saturation">จุดอิ่มตัว และวิธีหา</h2>
+
+    <p class="keypoint">
+      จุดอิ่มตัวคือจุดที่เพิ่มภาระต่อไปแล้ว throughput ไม่เพิ่ม แต่เวลาตอบสนองพุ่งขึ้น
+    </p>
+
+    <figure class="chart-figure bleed">
+      <figcaption>
+        <p class="chart-title">แผนภาพเชิงแนวคิดของจุดอิ่มตัว</p>
+        <p class="chart-caption">
+          แกนนอนคือจำนวนผู้ใช้ แกนตั้งคือค่าสัมพัทธ์ เส้นทึบคือ throughput ที่ไต่ขึ้นแล้วแบนราบ
+          เส้นประคือเวลาตอบสนองที่นิ่งช่วงแรก แล้วเงยขึ้นหลังผ่านจุดอิ่มตัว
+        </p>
+      </figcaption>
+      <svg viewBox="0 0 660 260" role="img" aria-label="แผนภาพเชิงแนวคิดแสดงเส้น throughput ที่ไต่ขึ้นแล้วแบนราบ กับเส้นเวลาตอบสนองที่นิ่งแล้วพุ่งขึ้นหลังจุดอิ่มตัว">
+        <g transform="translate(0,0)">
+          <line x1="60" y1="220" x2="620" y2="220" stroke="var(--border-strong)" stroke-width="1"/>
+          <line x1="60" y1="220" x2="60" y2="30" stroke="var(--border-strong)" stroke-width="1"/>
+          <line x1="384" y1="36" x2="384" y2="220" stroke="var(--signal)" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text x="60" y="240" font-size="11" fill="var(--muted)" text-anchor="middle">0</text>
+          <text x="195" y="240" font-size="11" fill="var(--muted)" text-anchor="middle">25</text>
+          <text x="330" y="240" font-size="11" fill="var(--muted)" text-anchor="middle">50</text>
+          <text x="465" y="240" font-size="11" fill="var(--muted)" text-anchor="middle">75</text>
+          <text x="600" y="240" font-size="11" fill="var(--muted)" text-anchor="middle">100</text>
+          <text x="620" y="256" font-size="11" fill="var(--muted)" text-anchor="end">จำนวนผู้ใช้ (VUs)</text>
+          <text x="60" y="24" font-size="10.5" fill="var(--muted)" letter-spacing=".06em">ค่าสัมพัทธ์</text>
+          <polyline points="60,220 114,197.5 168,175 222,152.5 276,130 330,107.5 384,85 438,67 492,53.5 546,46.8 600,44.5"
+                    fill="none" stroke="var(--chart-1)" stroke-width="1.8" stroke-linejoin="round"/>
+          <polyline points="60,207.1 114,207.1 168,206.5 222,205.9 276,204.6 330,203.3 384,200.7 438,194.3 492,175 546,130 600,52.9"
+                    fill="none" stroke="var(--chart-3)" stroke-width="1.8" stroke-dasharray="5 3" stroke-linejoin="round"/>
+          <circle cx="384" cy="85" r="3.4" fill="var(--chart-1)"/>
+          <circle cx="384" cy="200.7" r="3.4" fill="var(--chart-3)"/>
+          <text x="374" y="76" font-size="11" fill="var(--chart-1)" text-anchor="end">throughput</text>
+          <text x="374" y="196" font-size="11" fill="var(--chart-3)" text-anchor="end">เวลาตอบสนอง</text>
+          <text x="392" y="46" font-size="11" fill="var(--signal)">จุดอิ่มตัว</text>
+          <rect x="120" y="150" width="11" height="3" fill="var(--chart-1)"/>
+          <rect x="260" y="150" width="11" height="3" fill="var(--signal)"/>
+          <text x="138" y="155" font-size="11" fill="var(--fg-soft)">throughput (คำขอ/วินาที)</text>
+          <text x="278" y="155" font-size="11" fill="var(--fg-soft)">เวลาตอบสนอง</text>
+          <text x="278" y="170" font-size="11" fill="var(--signal)">เส้นแนวตั้งคือจุดอิ่มตัว</text>
+        </g>
+      </svg>
+      <p class="chart-foot">
+        แผนภาพนี้เป็นภาพเชิงแนวคิด ตัวเลขบนแกนเป็นค่าสัมพัทธ์ ตัวเลขจริงต้องได้จาก
+        การทำ breakpoint test ตามวิธีด้านล่าง
+      </p>
+    </figure>
+
+    <h3 id="step-method">วิธีหาแบบเพิ่มขึ้นทีละขั้น</h3>
+
+    <p>
+      เพิ่มจำนวนผู้ใช้เป็นขั้นละเท่า ๆ กัน ถือแต่ละขั้นนานพอที่ค่าจะนิ่ง
+      แล้วเทียบ throughput กับเปอร์เซ็นไทล์
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>แบบฟอร์มบันทึกผลการทำ step test — ตัวอย่างวิธีกรอก ไม่ใช่ผลการวัด</caption>
+        <thead>
+          <tr>
+            <th class="num">ขั้น</th>
+            <th class="num">VUs</th>
+            <th class="num">ระยะเวลา</th>
+            <th class="num">throughput</th>
+            <th class="num">p95</th>
+            <th class="num">error rate</th>
+            <th class="wrap">ข้อสังเกตที่ต้องบันทึก</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">1</td><td class="num">10</td><td class="num">5m</td>
+            <td class="num">94/s</td><td class="num">75 ms</td><td class="num">0.00%</td>
+            <td class="wrap">ค่าอ้างอิง — ใกล้เคียงกับการรันที่ใช้เป็นหลักฐานในบทเรียนนี้</td>
+          </tr>
+          <tr>
+            <td class="num">2</td><td class="num">20</td><td class="num">5m</td>
+            <td class="num">?</td><td class="num">?</td><td class="num">?</td>
+            <td class="wrap">ถ้า throughput โตเกือบสองเท่า แปลว่ายังมีกำลังเหลือ</td>
+          </tr>
+          <tr>
+            <td class="num">3</td><td class="num">40</td><td class="num">5m</td>
+            <td class="num">?</td><td class="num">?</td><td class="num">?</td>
+            <td class="wrap">จุดที่ throughput เริ่มโตช้ากว่าอัตราที่เพิ่มคือสัญญาณแรก</td>
+          </tr>
+          <tr>
+            <td class="num">4</td><td class="num">80</td><td class="num">5m</td>
+            <td class="num">?</td><td class="num">?</td><td class="num">?</td>
+            <td class="wrap">ถ้า throughput เท่าขั้นที่ 3 แต่ p95 โตขึ้นชัดเจน ให้หยุดตรงนี้</td>
+          </tr>
+          <tr>
+            <td class="num">5</td><td class="num">160</td><td class="num">5m</td>
+            <td class="num">?</td><td class="num">?</td><td class="num">?</td>
+            <td class="wrap">ถ้า error rate เริ่มสูง ให้ถือว่าขั้นก่อนหน้าคือความจุที่ยอมรับได้</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      เกณฑ์ตัดสินว่าถึงจุดอิ่มตัวมีสามข้อ ใช้ข้อใดข้อหนึ่งก็ได้ แต่ควรบันทึกทั้งสามไว้
+    </p>
+
+    <ul>
+      <li>เพิ่ม VUs อีก 100% แล้ว throughput โตไม่ถึง 20%</li>
+      <li>p95 โตเกิน 50% จากขั้นก่อนหน้า ขณะที่ throughput แทบไม่ขยับ</li>
+      <li>อัตราความผิดพลาดเริ่มสูงกว่าเกณฑ์ที่ยอมรับได้ ไม่ว่าจะเป็น 429, 503 หรือหมดเวลา</li>
+    </ul>
+
+    <p>
+      แถวแรกใช้ค่าจากการรันจริง (94/s กับ p95 75 ms) ขั้นที่เหลือเว้นเป็นคำถามโดยตั้งใจ
+      เพราะต้องวัดจากระบบของคุณเอง
+    </p>
+
+    <h2 id="slo-threshold">แปลง SLO เป็น threshold</h2>
+
+    <p>
+      SLO ที่เขียนให้วัดได้แปลงเป็น threshold ได้ตรงตัว ตารางนี้แสดงการแปลงที่พบบ่อย
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>แปลงข้อตกลงระดับบริการเป็นเงื่อนไขที่ k6 ตรวจได้</caption>
+        <thead>
+          <tr>
+            <th class="wrap">SLO ที่เขียนเป็นภาษา</th>
+            <th class="wrap">threshold ของ k6</th>
+            <th class="wrap">metric ที่ใช้</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">ผู้ใช้ 95% ต้องรอไม่เกิน 300 มิลลิวินาที</td>
+            <td class="code-cell">http_req_duration: ['p(95)&lt;300']</td>
+            <td class="wrap">http_req_duration (Trend)</td>
+          </tr>
+          <tr>
+            <td class="wrap">ผู้ใช้ 99% ต้องรอไม่เกิน 1 วินาที</td>
+            <td class="code-cell">http_req_duration: ['p(99)&lt;1000']</td>
+            <td class="wrap">http_req_duration (Trend)</td>
+          </tr>
+          <tr>
+            <td class="wrap">คำขอที่ผิดพลาดต้องต่ำกว่า 1%</td>
+            <td class="code-cell">http_req_failed: ['rate&lt;0.01']</td>
+            <td class="wrap">http_req_failed (Rate)</td>
+          </tr>
+          <tr>
+            <td class="wrap">การตรวจผลทางธุรกิจต้องผ่านเกิน 99%</td>
+            <td class="code-cell">checks: ['rate&gt;0.99']</td>
+            <td class="wrap">checks (Rate)</td>
+          </tr>
+          <tr>
+            <td class="wrap">ต้องไม่มีรอบใดถูกทิ้งเพราะเครื่องทดสอบไม่พอ</td>
+            <td class="code-cell">dropped_iterations: ['count&lt;1']</td>
+            <td class="wrap">dropped_iterations (Counter)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ข้อผิดพลาดที่พบบ่อยในการเขียน threshold</span>
+      </div>
+      <ul>
+        <li>
+          เขียน <code>rate&lt;1</code> แทน <code>rate&lt;0.01</code> เพราะ <code>rate</code> เป็นสัดส่วนทศนิยม
+          ค่า 1 จึงหมายถึง 100% ซึ่งเท่ากับไม่มีเกณฑ์เลย
+        </li>
+        <li>
+          ใช้ <code>avg</code> แทน <code>p(95)</code> ทั้งที่ SLO เขียนด้วยเปอร์เซ็นไทล์
+        </li>
+        <li>
+          ใส่ช่องว่างในนิพจน์ เช่น <code>'p (95) &lt; 500'</code> ที่ถูกคือ
+          <code>'p(95)&lt;500'</code> ไม่มีช่องว่างเลย
+        </li>
+        <li>
+          ลืมตั้ง threshold ให้ <code>checks</code> แล้วคิดว่าผลของ check จะทำให้การรันล้มเหลวเอง
+        </li>
+      </ul>
+    </div>
+
+    <p>
+      ถ้าใช้ <code>abortOnFail</code> กับหลายเกณฑ์ ต้องคิดล่วงหน้าว่าจะหยุดเมื่อใด
+      โดยทั่วไปให้ตั้ง <code>abortOnFail: true</code> เฉพาะเกณฑ์ที่หมายความว่า
+      "ระบบกำลังพัง ไม่ต้องทดสอบต่อ" เช่นอัตราความผิดพลาดเกิน <span class="key-figure">5%</span>
+      ส่วนเกณฑ์ด้านประสิทธิภาพให้รายงานผลไปโดยไม่หยุด
+    </p>
+
+    <h2 id="throughput-latency">throughput กับ latency และการเสื่อมสภาพอย่างค่อยเป็นค่อยไป</h2>
+
+    <p>
+      สองค่านี้ไม่ใช่ตัวชี้วัดเดียวกัน throughput สูงอาจมาพร้อม latency ที่แย่
+      และ latency ที่ดีอาจมาจากการยิงภาระน้อย
+    </p>
+
+    <div class="table-wrap">
+      <table class="data">
+        <caption>อ่านคู่ตัวเลข throughput กับ latency พร้อมกัน</caption>
+        <thead>
+          <tr>
+            <th class="wrap">throughput</th>
+            <th class="wrap">latency</th>
+            <th class="wrap">ตีความ</th>
+            <th class="wrap">ควรทำอะไร</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="wrap">สูง</td>
+            <td class="wrap">ต่ำ</td>
+            <td class="wrap">ภาวะที่ต้องการ — ระบบมีกำลังเหลือ</td>
+            <td class="wrap">เพิ่มภาระเพื่อหาว่าขีดจำกัดอยู่ตรงไหน</td>
+          </tr>
+          <tr>
+            <td class="wrap">สูง</td>
+            <td class="wrap">สูง</td>
+            <td class="wrap">ยังทำ throughput ได้ แต่เริ่มแลกด้วยเวลาของผู้ใช้</td>
+            <td class="wrap">หาสาเหตุที่ทำให้แต่ละคำขอช้า และตัดสินว่ายอมรับได้หรือไม่</td>
+          </tr>
+          <tr class="row-signal">
+            <td class="wrap">ทรงตัว</td>
+            <td class="wrap">พุ่ง</td>
+            <td class="wrap">เลยจุดอิ่มตัวแล้ว งานส่วนเกินไปต่อคิว</td>
+            <td class="wrap">หยุดเพิ่ม VU กลับไปแก้คอขวดก่อน</td>
+          </tr>
+          <tr>
+            <td class="wrap">ลดลง</td>
+            <td class="wrap">พุ่ง</td>
+            <td class="wrap">ระบบเริ่มเสียงาน อยู่ในช่วงพัง</td>
+            <td class="wrap">หยุดทดสอบ ตรวจว่าเกิดอะไรขึ้นกับระบบปลายทาง</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      graceful degradation คือคุณสมบัติที่ยอมให้บริการบางส่วนช้าลงหรือถูกปฏิเสธ
+      เพื่อรักษาบริการส่วนอื่นไว้ ตัวอย่างที่พบบ่อยคือตอบ 429 พร้อมส่วนหัวบอกให้ลองใหม่ทีหลัง
+      หากทดสอบ stress แล้วพบ 429 สม่ำเสมอ นั่นเป็นสัญญาณว่าระบบมีกลไกนี้อยู่จริง
+    </p>
+
+    <h2 id="generator-bottleneck">เมื่อเครื่องทดสอบกลายเป็นคอขวดเอง</h2>
+
+    <p>
+      อันตรายที่สุดของการตีความผลผิดคือคิดว่ากำลังวัดขีดจำกัดของระบบ
+      ทั้งที่จริงวัดขีดจำกัดของเครื่องที่รัน k6 สัญญาณเตือนมีสี่ข้อ
+    </p>
+
+    <ul>
+      <li>
+        <strong><code>dropped_iterations</code> มากกว่า 0</strong> แปลว่า k6 ไม่มี VU ว่าง
+        ให้เริ่มรอบตามกำหนด โหลดที่สร้างได้จึงต่ำกว่าแผน
+      </li>
+      <li>
+        <strong>CPU ของเครื่องที่รัน k6 แตะ 100%</strong> แปลว่าไม่เหลือกำลังสร้างภาระเพิ่ม
+      </li>
+      <li>
+        <strong><code>http_req_blocked</code> สูงขึ้นตามจำนวน VU</strong> แปลว่า
+        การรอ socket ฝั่งเครื่องทดสอบเป็นตัวจำกัด ไม่ใช่ฝั่งเซิร์ฟเวอร์
+      </li>
+      <li>
+        <strong>เพิ่ม VU แล้ว <code>vus</code> ที่ทำได้จริงไม่ถึงเป้า</strong> ให้สงสัยเพดาน
+        connection ของเครื่องทดสอบ
+      </li>
+    </ul>
+
+    <p>วิธีแก้เรียงตามลำดับที่ควรลอง</p>
+
+    <ol>
+      <li>ลดอัตราเป้าหมายลงก่อน เพื่อยืนยันว่าโหลดที่ต้องการสร้างได้</li>
+      <li>ย้ายการทดสอบไปเครื่องที่ไม่ได้ทำงานอื่นอยู่</li>
+      <li>แยกเครื่องทดสอบหลายเครื่องและรวมผลเข้าที่เดียว</li>
+      <li>ใช้ executor แบบ arrival-rate เพื่อดูว่า k6 ทิ้งงานไปกี่รอบ</li>
+    </ol>
+
+    <h2 id="summary">สรุปบทที่ 5</h2>
+
+    <ul>
+      <li>เลือกรูปแบบตามคำถาม เริ่มจาก smoke เสมอ</li>
+      <li>ช่วงภาวะคงตัวเท่านั้นที่ข้อมูลมีความหมาย แยกมันเป็น scenario ของตัวเองแล้วตั้ง threshold อ้างแท็ก <code>scenario</code></li>
+      <li>think time ทำให้จังหวะต่อรอบแปรผันตามระบบ ส่วน pacing ทำให้คงที่</li>
+      <li>จุดอิ่มตัวหาด้วย step test โดยดูว่าเมื่อเพิ่ม VUs อีก <span class="key-figure">100%</span> แล้ว throughput โตไม่ถึง <span class="key-figure">20%</span> หรือไม่</li>
+      <li>แปลง SLO เป็น threshold ได้ตรงตัว แต่ <code>rate</code> เป็นสัดส่วนทศนิยม ไม่ใช่เปอร์เซ็นต์</li>
+      <li>ตรวจว่าเครื่องทดสอบไม่ได้เป็นคอขวด โดยดู <code>dropped_iterations</code> และ CPU</li>
+    </ul>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.2" y="2.8" width="11.6" height="14.4" rx="1.4"/><path d="M7 6.4h6M7.4 10h.01M10 10h.01M12.6 10h.01M7.4 13h.01M10 13h.01M12.6 13h.01"/></svg>
+        <span class="label">ลองเอง</span>
+      </div>
+      <p>
+        เปิด <a href="../tools/calculator.html">เครื่องช่วยเลือกรูปแบบการทดสอบ</a>
+        ใส่อัตราเป้าหมายกับเวลาตอบสนอง p95 แล้วดูว่าควรเริ่มจากรูปแบบใด
+        สคริปต์เต็มดูได้ที่ <a href="../examples.html">หน้าสคริปต์ตัวอย่าง</a>
+      </p>
+    </div>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="../assets/js/storage.js"></script>
+<script src="../assets/js/site.js"></script>
+
+</body>
+</html>

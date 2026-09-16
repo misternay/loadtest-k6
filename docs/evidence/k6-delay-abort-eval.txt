@@ -1,0 +1,736 @@
+======================================================================
+หลักฐาน: พฤติกรรมจริงของ delayAbortEval ใน k6 v2.2.0
+วันที่รัน: 2026-09-16 15:29:40 +0700
+โฟลเดอร์ทำงาน: /Users/ar677005/Documents/AI_workspaces/learns/loadtest-k6
+k6: k6 v2.2.0 (commit/devel, go1.26.5, darwin/arm64)
+mock server: http://localhost:8080 (สตาร์ทด้วย node mock-server/server.mjs, หางยาวปิด)
+======================================================================
+
+เหตุผลของหลักฐานชุดนี้
+  เอกสารและบทเรียนเคยใช้ชื่อตัวเลือก delayAbortedCheck ซึ่งไม่มีอยู่ใน k6 v2.2.0
+  หลักฐานชุดนี้ตอบสามคำถามด้วยการรันจริง ไม่ได้อ้างจากความจำ
+    1) ตอนนี้สคริปต์ทั้ง 5 ไฟล์ยังทำให้ k6 เตือน unknown field อยู่ไหม
+    2) delayAbortEval ตัดข้อมูลช่วงอุ่นเครื่องออกจากการคิด threshold หรือไม่
+    3) ถ้าต้องการตัดสินเฉพาะช่วงภาวะคงตัวจริง ๆ ต้องทำอย่างไร
+
+
+======================================================================
+ส่วนที่ 1 — ตรวจว่าไม่มีคำเตือน unknown field อีกแล้ว
+======================================================================
+
+วิธีตรวจ: k6 inspect จะแยกวิเคราะห์ options ของสคริปต์และรายงานฟิลด์ที่ไม่รู้จัก
+โดยไม่ต้องรันโหลดจริง (ตรวจแล้วว่าวิธีนี้จับได้จริง ดูข้อ 1.1)
+
+
+$ for f in smoke load stress spike soak; do k6 inspect k6/$f.js; done   # สรุปจำนวนบรรทัดเตือน
+
+k6 inspect k6/smoke.js  → จำนวนบรรทัดเตือน unknown field: 0   (exit 0)
+k6 inspect k6/load.js  → จำนวนบรรทัดเตือน unknown field: 0   (exit 0)
+k6 inspect k6/stress.js  → จำนวนบรรทัดเตือน unknown field: 0   (exit 0)
+k6 inspect k6/spike.js  → จำนวนบรรทัดเตือน unknown field: 0   (exit 0)
+k6 inspect k6/soak.js  → จำนวนบรรทัดเตือน unknown field: 0   (exit 0)
+
+หมายเหตุ: k6 inspect เขียน JSON ของ options ที่แปลงแล้วออกทาง stdout
+บรรทัดเตือน (ถ้ามี) ออกทาง stderr จึงกรองด้วย grep ได้ตามคำสั่งด้านล่าง
+
+$ k6 inspect k6/load.js 2>&1 | grep -i 'unknown field'
+(ไม่มีผลลัพธ์ = ไม่มีฟิลด์ที่ไม่รู้จัก)
+
+$ k6 inspect k6/stress.js 2>&1 | grep -i 'unknown field'
+(ไม่มีผลลัพธ์ = ไม่มีฟิลด์ที่ไม่รู้จัก)
+
+
+----------------------------------------------------------------------
+ข้อ 1.1 — ยืนยันว่าวิธีตรวจนี้ "จับได้จริง" ไม่ใช่ผ่านเพราะตัวตรวจจับไม่ทำงาน
+----------------------------------------------------------------------
+
+$ cat /tmp/k6probe/oldname-check.js
+export const options = {
+  vus: 1,
+  duration: '1s',
+  thresholds: {
+    http_req_failed: [{ threshold: 'rate<0.05', abortOnFail: true, delayAbortedCheck: '60s' }],
+  },
+  delayAbortedCheck: '60s',
+};
+export default function () {}
+
+$ k6 inspect /tmp/k6probe/oldname-check.js 2>&1
+time="2026-09-16T15:29:41+07:00" level=warning msg="There were unknown fields in the options exported in the script" error="json: unknown field \"delayAbortedCheck\""
+{
+  "paused": null,
+  "vus": 1,
+  "duration": "1s",
+  "iterations": null,
+  "stages": null,
+  "scenarios": null,
+  "executionSegment": null,
+  "executionSegmentSequence": null,
+  "noSetup": null,
+  "setupTimeout": null,
+  "noTeardown": null,
+  "teardownTimeout": null,
+  "handleSummaryTimeout": null,
+  "rps": null,
+  "dns": {
+    "ttl": null,
+    "select": null,
+    "policy": null
+  },
+  "maxRedirects": null,
+  "userAgent": null,
+  "batch": null,
+  "batchPerHost": null,
+  "httpDebug": null,
+  "insecureSkipTLSVerify": null,
+  "tlsCipherSuites": null,
+  "tlsVersion": null,
+  "tlsAuth": null,
+  "throw": null,
+  "thresholds": {
+    "http_req_failed": [
+      {
+        "threshold": "rate\u003c0.05",
+        "abortOnFail": true,
+        "delayAbortEval": null
+      }
+    ]
+  },
+  "blacklistIPs": null,
+  "blockHostnames": null,
+  "hosts": null,
+  "noConnectionReuse": null,
+  "noVUConnectionReuse": null,
+  "minIterationDuration": null,
+  "ext": null,
+  "summaryTrendStats": null,
+  "summaryTimeUnit": null,
+  "systemTags": null,
+  "tags": null,
+  "metricSamplesBufferSize": null,
+  "noCookiesReset": null,
+  "discardResponseBodies": null,
+  "features": null
+}
+
+สรุปข้อ 1.1: k6 v2.2.0 ยังเตือนเมื่อเจอชื่อฟิลด์เก่า วิธีตรวจนี้จึงใช้ได้
+
+
+----------------------------------------------------------------------
+ข้อ 1.2 — ตัวเลือกที่ k6 แปลงแล้วของ load.js และ stress.js
+----------------------------------------------------------------------
+
+$ k6 inspect k6/load.js   (ตัดมาเฉพาะ thresholds กับชื่อ scenario)
+{
+  "thresholds": {
+    "checks": [
+      "rate>0.99"
+    ],
+    "http_req_duration": [
+      {
+        "threshold": "p(95)<500",
+        "abortOnFail": true,
+        "delayAbortEval": "1m0s"
+      },
+      "p(99)<1500"
+    ],
+    "http_req_failed": [
+      "rate<0.01"
+    ],
+    "items_payload_ok": [
+      "rate>0.99"
+    ]
+  },
+  "scenarios": [
+    "load"
+  ]
+}
+
+$ k6 inspect k6/stress.js   (ตัดมาเฉพาะ thresholds)
+{
+  "thresholds": {
+    "http_req_duration": [
+      "p(95)<2000"
+    ],
+    "http_req_failed": [
+      {
+        "threshold": "rate<0.05",
+        "abortOnFail": true,
+        "delayAbortEval": "1m30s"
+      }
+    ]
+  }
+}
+
+จุดที่ต้องสังเกต: ในผลลัพธ์มีคีย์ delayAbortEval อยู่จริง และไม่มีคีย์
+delayAbortedCheck หลงเหลืออยู่เลย
+
+
+======================================================================
+ส่วนที่ 2 — delayAbortEval ตัดข้อมูลช่วงอุ่นเครื่องออกจากการคิด threshold หรือไม่
+======================================================================
+
+การออกแบบการทดลอง
+  สคริปต์: docs/evidence/probes/probe-delay-abort-eval.js
+  ใช้ vus 1 นาน 20 วินาที โดย 10 วินาทีแรกยิงไปที่ /api/items?delay=600
+  (ปลายทางตอบ 600 ms คงที่ = จำลองช่วงอุ่นเครื่อง) แล้วอีก 10 วินาทีที่เหลือ
+  ยิงไปที่ /api/items ปกติ (ราว 25 ms) — ไม่มีความสุ่ม จึงเทียบผลได้ตรงไปตรงมา
+  threshold ตั้งไว้ที่ p(95)<200 ซึ่งตั้งใจให้ "ไม่ผ่าน" เพื่อให้เห็นค่าจริง
+
+  แบ่งเป็น 4 กรณี
+    ก. ไม่มี abortOnFail, ไม่มี delayAbortEval
+    ข. ไม่มี abortOnFail, มี delayAbortEval '12s'
+    ค. มี abortOnFail,   ไม่มี delayAbortEval
+    ง. มี abortOnFail,   มี delayAbortEval '12s'
+
+
+----------------------------------------------------------------------
+กรณีที่ ก — ไม่มี abortOnFail, ไม่มี delayAbortEval
+----------------------------------------------------------------------
+
+$ k6 run --summary-trend-stats="avg,med,max,p(90),p(95),p(99)" -e PROBE_ABORT=0 -e PROBE_DELAY_EVAL=0 docs/evidence/probes/probe-delay-abort-eval.js
+
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: docs/evidence/probes/probe-delay-abort-eval.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 50s max duration (incl. graceful stop):
+              * default: 1 looping VUs for 20s (gracefulStop: 30s)
+
+
+running (01.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   5% ] 1 VUs  01.0s/20s
+
+running (02.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+default   [  10% ] 1 VUs  02.0s/20s
+
+running (03.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+default   [  15% ] 1 VUs  03.0s/20s
+
+running (04.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+default   [  20% ] 1 VUs  04.0s/20s
+
+running (05.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+default   [  25% ] 1 VUs  05.0s/20s
+
+running (06.0s), 1/1 VUs, 5 complete and 0 interrupted iterations
+default   [  30% ] 1 VUs  06.0s/20s
+
+running (07.0s), 1/1 VUs, 6 complete and 0 interrupted iterations
+default   [  35% ] 1 VUs  07.0s/20s
+
+running (08.0s), 1/1 VUs, 7 complete and 0 interrupted iterations
+default   [  40% ] 1 VUs  08.0s/20s
+
+running (09.0s), 1/1 VUs, 8 complete and 0 interrupted iterations
+default   [  45% ] 1 VUs  09.0s/20s
+
+running (10.0s), 1/1 VUs, 9 complete and 0 interrupted iterations
+default   [  50% ] 1 VUs  10.0s/20s
+
+running (11.0s), 1/1 VUs, 9 complete and 0 interrupted iterations
+default   [  55% ] 1 VUs  11.0s/20s
+
+running (12.0s), 1/1 VUs, 11 complete and 0 interrupted iterations
+default   [  60% ] 1 VUs  12.0s/20s
+
+running (13.0s), 1/1 VUs, 13 complete and 0 interrupted iterations
+default   [  65% ] 1 VUs  13.0s/20s
+
+running (14.0s), 1/1 VUs, 15 complete and 0 interrupted iterations
+default   [  70% ] 1 VUs  14.0s/20s
+
+running (15.0s), 1/1 VUs, 17 complete and 0 interrupted iterations
+default   [  75% ] 1 VUs  15.0s/20s
+
+running (16.0s), 1/1 VUs, 19 complete and 0 interrupted iterations
+default   [  80% ] 1 VUs  16.0s/20s
+
+running (17.0s), 1/1 VUs, 21 complete and 0 interrupted iterations
+default   [  85% ] 1 VUs  17.0s/20s
+
+running (18.0s), 1/1 VUs, 23 complete and 0 interrupted iterations
+default   [  90% ] 1 VUs  18.0s/20s
+
+running (19.0s), 1/1 VUs, 25 complete and 0 interrupted iterations
+default   [  95% ] 1 VUs  19.0s/20s
+
+running (20.0s), 1/1 VUs, 26 complete and 0 interrupted iterations
+default   [ 100% ] 1 VUs  20.0s/20s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(95)<200' p(95)=603.32ms
+
+
+  █ TOTAL RESULTS 
+
+    HTTP
+    http_req_duration..............: avg=241.53ms med=36.4ms   max=604.96ms p(90)=603.04ms p(95)=603.32ms p(99)=604.54ms
+      { expected_response:true }...: avg=241.53ms med=36.4ms   max=604.96ms p(90)=603.04ms p(95)=603.32ms p(99)=604.54ms
+    http_req_failed................: 0.00%  0 out of 27
+    http_reqs......................: 27     1.345921/s
+
+    EXECUTION
+    iteration_duration.............: avg=742.87ms med=536.95ms max=1.11s    p(90)=1.1s     p(95)=1.1s     p(99)=1.11s   
+    iterations.....................: 27     1.345921/s
+    vus............................: 1      min=1       max=1
+    vus_max........................: 1      min=1       max=1
+
+    NETWORK
+    data_received..................: 69 kB  3.4 kB/s
+    data_sent......................: 2.2 kB 111 B/s
+
+
+
+
+running (20.1s), 0/1 VUs, 27 complete and 0 interrupted iterations
+default ✓ [ 100% ] 1 VUs  20s
+time="2026-09-16T15:30:01+07:00" level=error msg="thresholds on metrics 'http_req_duration' have been crossed"
+
+----------------------------------------------------------------------
+exit status: 99
+----------------------------------------------------------------------
+
+
+----------------------------------------------------------------------
+กรณีที่ ข — ไม่มี abortOnFail, มี delayAbortEval 12s
+----------------------------------------------------------------------
+
+$ k6 run --summary-trend-stats="avg,med,max,p(90),p(95),p(99)" -e PROBE_ABORT=0 -e PROBE_DELAY_EVAL=1 docs/evidence/probes/probe-delay-abort-eval.js
+
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: docs/evidence/probes/probe-delay-abort-eval.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 50s max duration (incl. graceful stop):
+              * default: 1 looping VUs for 20s (gracefulStop: 30s)
+
+
+running (01.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   5% ] 1 VUs  01.0s/20s
+
+running (02.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+default   [  10% ] 1 VUs  02.0s/20s
+
+running (03.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+default   [  15% ] 1 VUs  03.0s/20s
+
+running (04.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+default   [  20% ] 1 VUs  04.0s/20s
+
+running (05.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+default   [  25% ] 1 VUs  05.0s/20s
+
+running (06.0s), 1/1 VUs, 5 complete and 0 interrupted iterations
+default   [  30% ] 1 VUs  06.0s/20s
+
+running (07.0s), 1/1 VUs, 6 complete and 0 interrupted iterations
+default   [  35% ] 1 VUs  07.0s/20s
+
+running (08.0s), 1/1 VUs, 7 complete and 0 interrupted iterations
+default   [  40% ] 1 VUs  08.0s/20s
+
+running (09.0s), 1/1 VUs, 8 complete and 0 interrupted iterations
+default   [  45% ] 1 VUs  09.0s/20s
+
+running (10.0s), 1/1 VUs, 9 complete and 0 interrupted iterations
+default   [  50% ] 1 VUs  10.0s/20s
+
+running (11.0s), 1/1 VUs, 9 complete and 0 interrupted iterations
+default   [  55% ] 1 VUs  11.0s/20s
+
+running (12.0s), 1/1 VUs, 11 complete and 0 interrupted iterations
+default   [  60% ] 1 VUs  12.0s/20s
+
+running (13.0s), 1/1 VUs, 13 complete and 0 interrupted iterations
+default   [  65% ] 1 VUs  13.0s/20s
+
+running (14.0s), 1/1 VUs, 15 complete and 0 interrupted iterations
+default   [  70% ] 1 VUs  14.0s/20s
+
+running (15.0s), 1/1 VUs, 17 complete and 0 interrupted iterations
+default   [  75% ] 1 VUs  15.0s/20s
+
+running (16.0s), 1/1 VUs, 19 complete and 0 interrupted iterations
+default   [  80% ] 1 VUs  16.0s/20s
+
+running (17.0s), 1/1 VUs, 21 complete and 0 interrupted iterations
+default   [  85% ] 1 VUs  17.0s/20s
+
+running (18.0s), 1/1 VUs, 23 complete and 0 interrupted iterations
+default   [  90% ] 1 VUs  18.0s/20s
+
+running (19.0s), 1/1 VUs, 24 complete and 0 interrupted iterations
+default   [  95% ] 1 VUs  19.0s/20s
+
+running (20.0s), 1/1 VUs, 26 complete and 0 interrupted iterations
+default   [ 100% ] 1 VUs  20.0s/20s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(95)<200' p(95)=602.49ms
+
+
+  █ TOTAL RESULTS 
+
+    HTTP
+    http_req_duration..............: avg=241.9ms  med=43.57ms  max=602.74ms p(90)=602.36ms p(95)=602.49ms p(99)=602.68ms
+      { expected_response:true }...: avg=241.9ms  med=43.57ms  max=602.74ms p(90)=602.36ms p(95)=602.49ms p(99)=602.68ms
+    http_req_failed................: 0.00%  0 out of 27
+    http_reqs......................: 27     1.345525/s
+
+    EXECUTION
+    iteration_duration.............: avg=743.15ms med=544.53ms max=1.1s     p(90)=1.1s     p(95)=1.1s     p(99)=1.1s    
+    iterations.....................: 27     1.345525/s
+    vus............................: 1      min=1       max=1
+    vus_max........................: 1      min=1       max=1
+
+    NETWORK
+    data_received..................: 69 kB  3.4 kB/s
+    data_sent......................: 2.2 kB 111 B/s
+
+
+
+
+running (20.1s), 0/1 VUs, 27 complete and 0 interrupted iterations
+default ✓ [ 100% ] 1 VUs  20s
+time="2026-09-16T15:30:22+07:00" level=error msg="thresholds on metrics 'http_req_duration' have been crossed"
+
+----------------------------------------------------------------------
+exit status: 99
+----------------------------------------------------------------------
+
+
+----------------------------------------------------------------------
+กรณีที่ ค — มี abortOnFail, ไม่มี delayAbortEval
+----------------------------------------------------------------------
+
+$ k6 run --summary-trend-stats="avg,med,max,p(90),p(95),p(99)" -e PROBE_ABORT=1 -e PROBE_DELAY_EVAL=0 docs/evidence/probes/probe-delay-abort-eval.js
+
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: docs/evidence/probes/probe-delay-abort-eval.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 50s max duration (incl. graceful stop):
+              * default: 1 looping VUs for 20s (gracefulStop: 30s)
+
+
+running (01.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   5% ] 1 VUs  01.0s/20s
+
+running (02.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+default   [  10% ] 1 VUs  02.0s/20s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(95)<200' p(95)=602.4ms
+
+
+  █ TOTAL RESULTS 
+
+    HTTP
+    http_req_duration..............: avg=602.37ms med=602.37ms max=602.41ms p(90)=602.4ms p(95)=602.4ms p(99)=602.41ms
+      { expected_response:true }...: avg=602.37ms med=602.37ms max=602.41ms p(90)=602.4ms p(95)=602.4ms p(99)=602.41ms
+    http_req_failed................: 0.00%  0 out of 2
+    http_reqs......................: 2      0.999606/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.1s     med=1.1s     max=1.1s     p(90)=1.1s    p(95)=1.1s    p(99)=1.1s    
+    iterations.....................: 1      0.499803/s
+    vus............................: 1      min=1      max=1
+    vus_max........................: 1      min=1      max=1
+
+    NETWORK
+    data_received..................: 5.1 kB 2.6 kB/s
+    data_sent......................: 178 B  89 B/s
+
+
+
+
+running (02.0s), 0/1 VUs, 1 complete and 1 interrupted iterations
+default ✗ [  10% ] 1 VUs  02.0s/20s
+time="2026-09-16T15:30:24+07:00" level=error msg="thresholds on metrics 'http_req_duration' were crossed; at least one has abortOnFail enabled, stopping test prematurely"
+
+----------------------------------------------------------------------
+exit status: 99
+----------------------------------------------------------------------
+
+
+----------------------------------------------------------------------
+กรณีที่ ง — มี abortOnFail, มี delayAbortEval 12s
+----------------------------------------------------------------------
+
+$ k6 run --summary-trend-stats="avg,med,max,p(90),p(95),p(99)" -e PROBE_ABORT=1 -e PROBE_DELAY_EVAL=1 docs/evidence/probes/probe-delay-abort-eval.js
+
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: docs/evidence/probes/probe-delay-abort-eval.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 1 max VUs, 50s max duration (incl. graceful stop):
+              * default: 1 looping VUs for 20s (gracefulStop: 30s)
+
+
+running (01.0s), 1/1 VUs, 0 complete and 0 interrupted iterations
+default   [   5% ] 1 VUs  01.0s/20s
+
+running (02.0s), 1/1 VUs, 1 complete and 0 interrupted iterations
+default   [  10% ] 1 VUs  02.0s/20s
+
+running (03.0s), 1/1 VUs, 2 complete and 0 interrupted iterations
+default   [  15% ] 1 VUs  03.0s/20s
+
+running (04.0s), 1/1 VUs, 3 complete and 0 interrupted iterations
+default   [  20% ] 1 VUs  04.0s/20s
+
+running (05.0s), 1/1 VUs, 4 complete and 0 interrupted iterations
+default   [  25% ] 1 VUs  05.0s/20s
+
+running (06.0s), 1/1 VUs, 5 complete and 0 interrupted iterations
+default   [  30% ] 1 VUs  06.0s/20s
+
+running (07.0s), 1/1 VUs, 6 complete and 0 interrupted iterations
+default   [  35% ] 1 VUs  07.0s/20s
+
+running (08.0s), 1/1 VUs, 7 complete and 0 interrupted iterations
+default   [  40% ] 1 VUs  08.0s/20s
+
+running (09.0s), 1/1 VUs, 8 complete and 0 interrupted iterations
+default   [  45% ] 1 VUs  09.0s/20s
+
+running (10.0s), 1/1 VUs, 9 complete and 0 interrupted iterations
+default   [  50% ] 1 VUs  10.0s/20s
+
+running (11.0s), 1/1 VUs, 9 complete and 0 interrupted iterations
+default   [  55% ] 1 VUs  11.0s/20s
+
+running (12.0s), 1/1 VUs, 11 complete and 0 interrupted iterations
+default   [  60% ] 1 VUs  12.0s/20s
+
+
+  █ THRESHOLDS 
+
+    http_req_duration
+    ✗ 'p(95)<200' p(95)=602.41ms
+
+
+  █ TOTAL RESULTS 
+
+    HTTP
+    http_req_duration..............: avg=507.4ms med=601.91ms max=602.51ms p(90)=602.32ms p(95)=602.41ms p(99)=602.49ms
+      { expected_response:true }...: avg=507.4ms med=601.91ms max=602.51ms p(90)=602.32ms p(95)=602.41ms p(99)=602.49ms
+    http_req_failed................: 0.00%  0 out of 12
+    http_reqs......................: 12     0.999947/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.05s   med=1.1s     max=1.1s     p(90)=1.1s     p(95)=1.1s     p(99)=1.1s    
+    iterations.....................: 11     0.916618/s
+    vus............................: 1      min=1       max=1
+    vus_max........................: 1      min=1       max=1
+
+    NETWORK
+    data_received..................: 31 kB  2.6 kB/s
+    data_sent......................: 1.0 kB 87 B/s
+
+
+
+
+running (12.0s), 0/1 VUs, 11 complete and 1 interrupted iterations
+default ✗ [  60% ] 1 VUs  12.0s/20s
+time="2026-09-16T15:30:37+07:00" level=error msg="thresholds on metrics 'http_req_duration' were crossed; at least one has abortOnFail enabled, stopping test prematurely"
+
+----------------------------------------------------------------------
+exit status: 99
+----------------------------------------------------------------------
+
+
+======================================================================
+ส่วนที่ 2 (สรุป) — ตารางเทียบสี่กรณี
+======================================================================
+
+  กรณี  abortOnFail  delayAbortEval   รันจริง(วินาที)  รอบที่จบ  รอบถูกตัด  p(95) ที่ k6 รายงาน  exit  unknown field
+    ก       ไม่มี       ไม่มี           20.1s           27        0          603.32 ms            99    0
+    ข       ไม่มี       12s             20.1s           27        0          602.49 ms            99    0
+    ค       มี          ไม่มี           02.0s           1         1          602.4 ms             99    0
+    ง       มี          12s             12.0s           11        1          602.41 ms            99    0
+
+ข้อสรุปจากตาราง
+  1) กรณี ก กับ ข (ไม่มี abortOnFail) รันจนจบครบความยาวที่ตั้งไว้ (20.1s กับ 20.1s)
+     และรายงาน p(95) ใกล้กันมาก (603.32 ms กับ 602.49 ms)
+     ทั้งคู่ยังสะท้อนช่วงอุ่นเครื่องที่ตอบ 600 ms อยู่เต็ม ๆ
+     → ถ้า delayAbortEval ตัดข้อมูลช่วงอุ่นเครื่องออก p(95) ของกรณี ข จะต้องลดลง
+       เหลือราว 25-45 ms แต่ไม่เป็นเช่นนั้น
+     → delayAbortEval "ไม่ได้ตัดข้อมูลออกจากการคำนวณ threshold"
+
+  2) กรณี ค กับ ง (มี abortOnFail) ถูกตัดจบทั้งคู่ แต่เวลาที่ถูกตัดต่างกันชัดเจน
+     กรณี ค ถูกตัดเมื่อรันได้ 02.0s ส่วนกรณี ง ถูกตัดเมื่อรันได้ 12.0s
+     (ต่างกันราว 10.0 วินาที
+     โดยกรณี ง ตั้ง delayAbortEval ไว้ '12s' แต่ k6 ตรวจ threshold เป็นรอบ
+     จึงตัดจริงหลังผ่าน 12 วินาทีไปแล้ว — ทิศทางและขนาดตรงตามที่ตั้งไว้)
+     → delayAbortEval เลื่อน "การตัดสินใจหยุดการรัน" ได้จริง ตามที่เอกสารระบุ
+
+  3) ทั้งสี่กรณีไม่มีการเตือน unknown field เลย (คอลัมน์สุดท้ายเป็น 0 ทุกแถว)
+     และ k6 ไม่ได้เพิกเฉยตัวเลือกนี้ — มันทำงานจริงตามข้อ 2
+
+  4) สังเกตกรณี ง: ตอนที่ k6 ตัดสินใจหยุด (หลังวินาทีที่ 12) ค่า p(95) ที่ใช้ตัดสิน
+     ยังเป็น 602.41 ms คือยังนับช่วงอุ่นเครื่องรวมอยู่ด้วย
+     นี่คือหลักฐานตรงที่สุดว่า delayAbortEval เลื่อนเวลา ไม่ได้กรองข้อมูล
+
+
+======================================================================
+ส่วนที่ 3 — ถ้าต้องการตัดสินเฉพาะช่วงภาวะคงตัวจริง ๆ ต้องทำอย่างไร
+======================================================================
+
+วิธีที่พิสูจน์แล้วว่าได้ผล: แยกช่วงภาวะคงตัวเป็น scenario ของตัวเองที่มี startTime
+แล้วตั้ง threshold แบบอ้างแท็ก scenario ทำให้ k6 คิดเปอร์เซ็นไทล์จากเฉพาะ
+ตัวอย่างของ scenario นั้น ไม่ต้องใช้ delayAbortEval เลย
+
+$ cat docs/evidence/probes/probe-scenario-scope.js
+// probe-scenario-scope.js — เครื่องมือสร้างหลักฐาน: ตัดสินเฉพาะช่วงภาวะคงตัวจริง ๆ
+//
+// ปัญหาที่ไฟล์นี้ตอบ: ถ้าไม่ใช้ delayAbortEval แล้วจะตัดข้อมูลช่วงอุ่นเครื่อง
+// ออกจากการตัดสิน threshold ได้อย่างไร
+//
+// คำตอบที่พิสูจน์ได้: แยกช่วงภาวะคงตัวออกเป็น scenario ของตัวเอง (มี startTime)
+// แล้วตั้ง threshold แบบอ้างแท็ก scenario — k6 จะคิดค่าเปอร์เซ็นไทล์
+// จากเฉพาะตัวอย่างของ scenario นั้น
+//
+// รัน (ต้องสตาร์ท mock server ก่อน):
+//   k6 run --summary-trend-stats="avg,med,max,p(95)" docs/evidence/probes/probe-scenario-scope.js
+//
+// ผลที่ต้องได้: exit code 0 และในบล็อก THRESHOLDS เห็นสองบรรทัด
+//   http_req_duration{scenario:steady}  ✓ 'p(95)<200'  p(95) ราว 40-50 ms
+//   http_req_duration{scenario:warmup}  ✓ 'p(95)<2000' p(95) ราว 603 ms
+// ขณะที่ค่า http_req_duration รวมทั้งการรันยังสูงราว 600 ms เพราะมีช่วงอุ่นเครื่องปนอยู่
+
+import http from 'k6/http';
+import { sleep } from 'k6';
+
+const BASE_URL = (__ENV.BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
+
+export const options = {
+  scenarios: {
+    // ช่วงอุ่นเครื่อง: ปลายทางตอบช้า 600 ms คงที่
+    warmup: { executor: 'constant-vus', vus: 1, duration: '8s', exec: 'warmup', startTime: '0s' },
+    // ช่วงภาวะคงตัว: เริ่มหลังช่วงอุ่นเครื่องจบ สคริปต์นี้จึงไม่ต้องใช้ delayAbortEval เลย
+    steady: { executor: 'constant-vus', vus: 1, duration: '8s', exec: 'steady', startTime: '8s' },
+  },
+  thresholds: {
+    'http_req_duration{scenario:warmup}': ['p(95)<2000'],
+    'http_req_duration{scenario:steady}': ['p(95)<200'],
+  },
+};
+
+export function warmup() {
+  http.get(`${BASE_URL}/api/items?delay=600`, { tags: { scenario: 'warmup' } });
+  sleep(0.5);
+}
+
+export function steady() {
+  http.get(`${BASE_URL}/api/items`, { tags: { scenario: 'steady' } });
+  sleep(0.5);
+}
+
+$ k6 run --summary-trend-stats="avg,med,max,p(95)" docs/evidence/probes/probe-scenario-scope.js
+
+----------------------------------------------------------------------
+บล็อก THRESHOLDS ของการรันนี้
+----------------------------------------------------------------------
+█ THRESHOLDS 
+
+    http_req_duration{scenario:steady}
+    ✓ 'p(95)<200' p(95)=41.05ms
+
+    http_req_duration{scenario:warmup}
+    ✓ 'p(95)<2000' p(95)=614.37ms
+
+----------------------------------------------------------------------
+exit status: 0
+----------------------------------------------------------------------
+
+ผลรวมทั้งการรันยังมี p(95) ราว 600 ms เพราะค่า http_req_duration รวมทุกตัวอย่าง
+แต่สอง threshold ที่อ้างแท็ก scenario แยกกันนั้นเห็นข้อมูลคนละชุด:
+  { scenario:warmup } → p(95) ราว 602 ms (ช่วงอุ่นเครื่องเท่านั้น)
+  { scenario:steady } → p(95) ราว 40-47 ms (ช่วงภาวะคงตัวเท่านั้น) และผ่านเกณฑ์ p(95)<200
+
+
+======================================================================
+สรุปสำหรับนำไปเขียนในบทเรียน
+======================================================================
+
+ชื่อตัวเลือกที่ถูกต้องของ k6 v2.2.0
+  • ชื่อที่ถูกคือ delayAbortEval ใช้ในรูปแบบยาวของ threshold คู่กับ abortOnFail: true
+  • ชื่อ delayAbortedCheck ไม่มีอยู่จริง และ k6 ไม่ได้ทำงานตามที่เขียนไว้
+
+สิ่งที่ delayAbortEval ทำ
+  • เลื่อน "เวลาที่ k6 ใช้ตัดสินใจหยุดการรัน" เมื่อ threshold ที่ตั้ง abortOnFail: true ไม่ผ่าน
+    หลักฐาน: กรณี ค ถูกตัดเมื่อรันได้ 02.0s กรณี ง ถูกตัดเมื่อรันได้ 12.0s
+
+สิ่งที่ delayAbortEval ไม่ได้ทำ
+  • ไม่ได้ตัดข้อมูลช่วงอุ่นเครื่องออกจากการคิดค่า threshold
+    หลักฐาน: กรณี ก กับ ข รันจนจบ 20.1s กับ 20.1s
+    และได้ p(95) 603.32 ms กับ 602.49 ms ซึ่งใกล้กันมาก
+    ถ้ามันกรองข้อมูลได้ p(95) ของกรณี ข จะต้องลงมาเหลือราว 25-45 ms
+
+ผลข้างเคียงที่ต้องรู้ (พบจากการทดลองในโปรเจกต์นี้)
+  • k6 ตรวจชื่อฟิลด์ที่ไม่รู้จักเฉพาะระดับบนสุดของ options
+    ถ้าใส่ชื่อผิด "ข้างใน" ออบเจกต์ threshold k6 จะเงียบและเพิกเฉย ไม่มีบรรทัดเตือน
+    ดังนั้นให้ตรวจด้วย k6 inspect ซึ่งแสดง options ที่แปลงแล้ว แทนการดูแค่ว่ามีบรรทัดเตือนไหม
+
+ถ้าต้องการตัดสินเฉพาะช่วงภาวะคงตัวจริง ๆ มีสามวิธีที่ได้ผล
+  1) แยกช่วงภาวะคงตัวเป็น scenario ของตัวเอง (มี startTime) แล้วตั้ง threshold
+     แบบอ้างแท็ก scenario เช่น 'http_req_duration{scenario:steady}': ['p(95)<500']
+     — พิสูจน์แล้วในส่วนที่ 3 ของไฟล์นี้ (exit 0)
+  2) รันช่วงภาวะคงตัวเป็นการรันแยกต่างหาก แล้วอ่านผลเฉพาะการรันนั้น
+  3) ส่งออกข้อมูลดิบด้วย -o csv=raw.csv แล้วเลือกช่วงเวลาที่จะวิเคราะห์เอง
+     วิธีนี้ยืดหยุ่นที่สุดแต่ต้องคำนวณเปอร์เซ็นไทล์เอง
+
+หมายเหตุเรื่องวิธีที่ใช้กันบ่อยแต่ไม่ถูก
+  • delayAbortEval ไม่ใช่เครื่องมือตัดช่วงอุ่นเครื่อง → ห้ามสอนแบบนั้น
+  • gracefulStop / gracefulRampDown ไม่เกี่ยวกับการกรองข้อมูล
+    มันกำหนดว่า k6 จะรอให้รอบที่ค้างอยู่จบก่อนหยุดนานเท่าไร และข้อมูลของรอบ
+    ที่รอให้จบเหล่านั้นก็ยังถูกนับในสรุปผลตามปกติ
+
+======================================================================
+ความต่างระหว่าง p(95) รวมของการรันกับ p(95) ของแต่ละ scenario (จากส่วนที่ 3)
+  http_req_duration รวมทั้งการรัน : avg=219.94ms med=37.98ms  max=618.28ms p(95)=606.7ms
+======================================================================
+

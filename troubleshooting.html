@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แก้ปัญหาที่พบบ่อยในการใช้ k6 — อาการ สาเหตุ และวิธีแก้ | Load Testing ด้วย k6</title>
+<meta name="description" content="รวมปัญหาที่พบบ่อยเมื่อใช้ k6 จัดกลุ่มตามอาการ ตั้งแต่ติดตั้งและรันสคริปต์ ปัญหาเครือข่าย ผลลัพธ์ที่ดูแปลก threshold ที่ไม่ผ่าน ไปจนถึงปัญหาเครื่องทดสอบเป็นคอขวดเอง">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>/* ตั้งธีมก่อน CSS ถูกวาด — กันจอกะพริบขาวตอนโหลด */
+(function(){try{var t=localStorage.getItem('ltk6.theme.v1');
+if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body data-page="troubleshooting" data-root="">
+
+<a class="skip-link" href="#main">ข้ามไปที่เนื้อหาหลัก</a>
+
+<header class="topbar" id="topbar"></header>
+
+<noscript>
+  <div class="empty-state" style="margin:16px">
+    เมนูและสารบัญในหน้านี้ต้องเปิด JavaScript ส่วนเนื้อหาด้านล่างอ่านได้ตามปกติ
+  </div>
+</noscript>
+
+<div class="shell">
+
+  <nav class="sidebar" id="sidebar" aria-label="เมนูหลัก"></nav>
+
+  <main class="article" id="main">
+
+    <p class="eyebrow">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+      อ้างอิง
+    </p>
+
+    <h1>แก้ปัญหาที่พบบ่อย</h1>
+
+    <p class="lede">
+      ปัญหายี่สิบข้อที่เจอบ่อยที่สุดเมื่อใช้ k6 จัดกลุ่มตามอาการ
+      แต่ละข้อมีอาการที่เห็นบนหน้าจอ สาเหตุที่เป็นไปได้ และวิธีแก้ที่ทำตามได้ทันที
+    </p>
+
+    <div class="takeaways">
+      <p class="takeaways__title">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 5.6h9M7.4 10h9M7.4 14.4h9"/><path d="M3.8 5.6h.01M3.8 10h.01M3.8 14.4h.01"/></svg>
+        ใจความสำคัญ
+      </p>
+      <ol>
+        <li>สาเหตุร่วมที่พบบ่อยคือใช้สิ่งที่ k6 ไม่มี เช่น <code>require()</code> ของ Node หรือหน่วยเวลาแบบคำเต็ม จึงควรตรวจด้วย <code>k6 inspect script.js</code> ก่อนยิงโหลดจริง</li>
+        <li>ตัวเลขที่ดูดีไม่ได้แปลว่าเชื่อถือได้ ต้องดู <code>http_req_failed</code>, <code>dropped_iterations</code> และบรรทัด <code>running</code> ประกอบเสมอ</li>
+        <li>ถ้าเพิ่ม VU แล้วอัตราคำขอไม่ขยับ แต่ CPU ของเครื่องที่รัน k6 แตะ 100% แปลว่าเครื่องทดสอบเป็นคอขวด ไม่ใช่ระบบปลายทาง</li>
+      </ol>
+    </div>
+
+    <div class="callout callout--note">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.2"/><path d="M10 9.2v4.3M10 6.7h.01"/></svg>
+        <span class="label">วิธีใช้หน้านี้</span>
+      </div>
+      <p>
+        กดหัวข้อเพื่อเปิดอ่านรายละเอียด กล่องสีเทาคือข้อความที่มักเห็นบนหน้าจอจริง
+        ให้เทียบกับสิ่งที่คุณเห็น ถ้าตรงกันเลยให้ทำตามหัวข้อนั้น ถ้าไม่ตรง
+        ให้ดูกลุ่มที่ใกล้เคียงที่สุดก่อน เพราะหลายอาการมีสาเหตุร่วมกัน
+      </p>
+      <p>
+        หมายเหตุเล็กน้อย: ในกล่องข้อความ k6 จะพิมพ์เครื่องหมายถูกและกากบาทกำกับบรรทัดที่ตั้งเกณฑ์ไว้
+        หน้านี้เขียนเป็นคำว่า "ผ่าน" และ "ไม่ผ่าน" แทน เพื่อให้อ่านออกด้วยโปรแกรมอ่านหน้าจอ
+        และเพื่อไม่ให้ปะปนกับสัญลักษณ์อื่น ส่วนข้อความอื่นในกล่องเป็นไปตามที่ k6 พิมพ์จริง
+      </p>
+    </div>
+
+    <div class="callout callout--warn">
+      <div class="callout__head">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3.4l6.9 12H3.1z"/><path d="M10 8.2v3.4M10 13.6h.01"/></svg>
+        <span class="label">ก่อนแก้ปัญหาด้วยการเพิ่มจำนวน VU</span>
+      </div>
+      <p>
+        เกือบทุกอาการในกลุ่ม "ผลลัพธ์ดูแปลก" ไม่ได้แก้ได้ด้วยการเพิ่ม VU
+        การเพิ่ม VU ตอนที่ยังไม่รู้สาเหตุจะยิ่งรบกวนระบบปลายทางและทำให้อ่านผลยากขึ้น
+        ให้แก้ที่สาเหตุก่อน แล้วค่อยกลับไปวัดใหม่
+      </p>
+    </div>
+
+    <p class="keypoint">
+      ก่อนอ่านตัวเลขประสิทธิภาพใด ๆ ให้ตรวจสามอย่างนี้ก่อน — บรรทัด running, dropped_iterations และอัตราความผิดพลาด ถ้าสามอย่างนี้ยังไม่สะอาด ตัวเลขที่เหลือยังใช้ตัดสินผลไม่ได้
+    </p>
+
+    <div class="faq-group">
+
+      <h2 id="group-run">กลุ่มที่ 1 — ติดตั้งและรันสคริปต์</h2>
+
+      <details class="faq">
+        <summary>1. รันแล้วขึ้นว่าไม่รู้จักคำสั่ง k6</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">zsh: command not found: k6</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ยังไม่ได้ติดตั้ง k6</li>
+              <li>ติดตั้งแล้ว แต่ไบนารีไม่อยู่ใน PATH ของเชลล์</li>
+              <li>เปิดเทอร์มินัลค้างไว้ตั้งแต่ก่อนติดตั้ง</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ตรวจด้วย <code>which -a k6</code> ถ้าไม่พบคือไม่มีใน PATH</li>
+              <li>ติดตั้งตามคู่มือทางการที่ <a href="https://grafana.com/docs/k6/latest/set-up/install-k6/" rel="noopener">grafana.com/docs/k6 — install</a></li>
+              <li>เปิดเทอร์มินัลใหม่หนึ่งครั้ง</li>
+              <li>ถ้าใช้ Docker ให้เรียกผ่าน <code>docker run --rm -i grafana/k6 run - &lt;script.js</code></li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>2. k6 อ่านสคริปต์ไม่ผ่านด้วยข้อผิดพลาดทางไวยากรณ์</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">ERRO[0000] SyntaxError: Unexpected token (3:14)
+	at go.k6.io/k6/js/modules/...</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ใช้ <code>require()</code> ของ Node ซึ่ง k6 ไม่รองรับ ต้องใช้ <code>import</code></li>
+              <li>เรียกไลบรารีของ Node เช่น <code>fs</code>, <code>path</code>, <code>crypto</code></li>
+              <li>ลืมปิดวงเล็บหรือปีกกาใน <code>options</code></li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>เปลี่ยน <code>require('k6/http')</code> เป็น <code>import http from 'k6/http'</code></li>
+              <li>แทนไลบรารีของ Node ด้วยโมดูล k6 เช่น <code>k6/crypto</code></li>
+              <li>ตรวจไวยากรณ์ก่อนรันด้วย <code>k6 inspect script.js</code></li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>3. สคริปต์รันจบในเสี้ยววินาทีและไม่มีข้อมูลอะไรเลย</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">iteration_duration.............: avg=0s min=0s med=0s max=0s
+iterations.....................: 0      0/s
+running (0.0s), 0/10 VUs</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ฟังก์ชันที่ส่งออกไม่ชื่อ <code>default</code></li>
+              <li><code>options</code> ไม่ได้ถูกส่งออก หรือไม่มี scenario ที่ทำงานจริง</li>
+              <li><code>duration</code> เป็นค่าว่างหรือตีความเป็นศูนย์</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ตรวจว่าฟังก์ชันเขียนว่า <code>export default function ()</code></li>
+              <li>ตรวจว่า <code>options</code> ถูกส่งออกด้วยคำว่า <code>export</code></li>
+              <li>รัน <code>k6 inspect script.js</code> แล้วดูว่าค่า options ตรงกับที่ตั้งใจ</li>
+              <li>เพิ่ม <code>console.log('รอบทำงาน')</code> บรรทัดแรกในฟังก์ชัน</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>4. ตั้งค่า duration หรือ stages แล้ว k6 บอกว่าแปลงค่าไม่ได้</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">ERRO[0000] invalid duration "5 minutes"
+ERRO[0000] unknown executor "rampingVUs"</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>เขียนหน่วยเวลาเป็นคำเต็ม เช่น <code>'5 minutes'</code></li>
+              <li>ใช้ชื่อ executor ผิดรูปแบบ เช่น <code>rampingVUs</code></li>
+              <li>ใส่จำนวน VU เป็นสตริงใน stages</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ใช้หน่วยย่อ <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code> ติดกับตัวเลข เช่น <code>'5m'</code></li>
+              <li>ใช้ชื่อ executor ตามที่กำหนด เช่น <code>'ramping-vus'</code>, <code>'constant-arrival-rate'</code> ตามตารางใน บทที่ 2</li>
+              <li>ค่า <code>target</code> ต้องเป็นตัวเลขไม่ใส่เครื่องหมายคำพูด เช่น <code>{ duration: '1m', target: 10 }</code></li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <h2 id="group-network">กลุ่มที่ 2 — เครือข่ายและการเชื่อมต่อ</h2>
+
+      <details class="faq">
+        <summary>5. ต่อปลายทางไม่ได้ ทุกคำขอและทุก VU ล้มเหลวเหมือนกันหมด</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">WARN[0001] Request Failed  error="Get \"http://localhost:8080/api/items\": dial tcp 127.0.0.1:8080: connect: connection refused"
+http_req_failed................: 100.00% ล้มเหลว 1155</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ปลายทางไม่ได้ทำงานอยู่</li>
+              <li>รันปลายทางคนละพอร์ตกับสคริปต์</li>
+              <li>ค่าที่ส่งด้วย <code>-e BASE_URL=…</code> ไม่ถูกอ่าน เพราะสะกดชื่อไม่ตรง</li>
+              <li>ปลายทางผูกกับที่อยู่เฉพาะเครื่อง แต่สคริปต์ยิงไปชื่อโฮสต์อื่น</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ตรวจว่าปลายทางตอบจริงด้วย <code>curl -i http://localhost:8080/api/items</code></li>
+              <li>ถ้าใช้ mock server ให้รัน <code>node mock-server/server.mjs</code> แล้วดูพอร์ตที่ฟังอยู่</li>
+              <li>ตรวจว่าชื่อคีย์ที่ส่งตรงกับที่สคริปต์อ่าน เช่น <code>__ENV.BASE_URL</code> คู่กับ <code>-e BASE_URL=…</code></li>
+              <li>พิมพ์ <code>console.log(BASE_URL)</code> บรรทัดแรกเพื่อยืนยันว่าค่ามาถึงจริง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>6. บางคำขอหมดเวลา แต่ปลายทางยังทำงานอยู่</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">error="Get \"…\": context deadline exceeded"
+http_req_duration..............: avg=60.00s  max=60.00s</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>หมดเวลารอตามค่าเริ่มต้น <span class="key-figure">60</span> วินาที</li>
+              <li>ตั้ง <code>timeout</code> ของคำขอสั้นเกินไป</li>
+              <li>มี proxy หรือ load balancer ตัดการเชื่อมต่อก่อน</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ดูว่า <code>http_req_duration</code> เท่ากับเพดานเวลาพอดีไหม ถ้าเท่ากันคือหมดเวลา</li>
+              <li>ตั้งเวลารอให้เหมาะกับงาน เช่น <code>http.get(url, { timeout: '10s' })</code></li>
+              <li>ยิงด้วย <code>curl -w '%{time_total}'</code> ถ้า curl เร็วแต่ k6 ช้า ให้ตรวจว่ามีอะไรอยู่ระหว่างทาง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>7. ขึ้นข้อผิดพลาดเรื่องใบรับรอง TLS เมื่อยิงไปที่ https</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">error="Get \"https://…\": tls: failed to verify certificate: x509: certificate signed by unknown authority"</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ปลายทางใช้ใบรับรองที่ออกเอง (self-signed)</li>
+              <li>ชื่อโฮสต์ไม่ตรงกับชื่อในใบรับรอง</li>
+              <li>เครื่องยังไม่ได้ติดตั้ง certificate authority ภายในองค์กร</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ติดตั้ง certificate authority ขององค์กรลงในที่เก็บของระบบ</li>
+              <li>ถ้าเป็นสภาพแวดล้อมทดสอบในเครื่อง ใช้ <code>k6 run --insecure-skip-tls-verify script.js</code></li>
+              <li>ตรวจว่า <span class="key-figure"><code>--insecure-skip-tls-verify</code></span> ให้ผลจริง จาก <code>http_req_tls_handshaking</code></li>
+              <li>ห้ามใช้กับระบบจริงเด็ดขาด</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>8. รันด้วย VU มาก ๆ แล้วขึ้นว่าเปิดไฟล์หรือ socket เกินขีดจำกัด</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">WARN[0012] Request Failed  error="…: socket: too many open files"
+http_req_blocked...............: avg=12.50ms max=340.00ms</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ขีดจำกัดไฟล์ที่โปรเซสเปิดได้ (file descriptor) ต่ำกว่าจำนวน connection</li>
+              <li>ใช้ <code>--no-connection-reuse</code> ทำให้เปิด connection ใหม่ทุกคำขอ</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ดูขีดจำกัดด้วย <code>ulimit -n</code> แล้วเพิ่มด้วย <span class="key-figure"><code>ulimit -n 65535</code></span> ก่อนรัน k6</li>
+              <li>ยกเลิก <code>--no-connection-reuse</code> ถ้าไม่ได้ตั้งใจทดสอบการเปิด connection ใหม่</li>
+              <li>ดูว่า <code>http_req_blocked</code> สูงขึ้นตามจำนวน VU ไหม ถ้าใช่ เครื่องทดสอบเป็นคอขวด ต้องลด VU</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <h2 id="group-strange">กลุ่มที่ 3 — ผลลัพธ์ดูแปลก</h2>
+
+      <details class="faq">
+        <summary>9. อัตราความล้มเหลวสูงมาก ทั้งที่เปิดเว็บด้วยเบราว์เซอร์ได้ปกติ</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">http_req_failed................: 100.00% ล้มเหลว 1155 จาก 1155
+http_req_duration..............: avg=3.20ms  p(95)=4.10ms</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>คำขอได้สถานะ 4xx ซึ่ง k6 นับเป็นความล้มเหลว</li>
+              <li>ยิงไปพาธที่ไม่มีอยู่ หรือไม่ได้ส่งข้อมูลยืนยันตัวตน</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ดูรหัสสถานะจากคำขอแรกด้วย <code>console.log(res.status)</code> ว่าเป็น 401, 403, 404 หรือ 500</li>
+              <li>ถ้าเป็น 401 หรือ 403 ให้ตรวจส่วนหัวการยืนยันตัวตน</li>
+              <li>ถ้าเป็น 404 ให้ตรวจพาธและวิธี HTTP</li>
+              <li>ถ้าเป็นผลที่ตั้งใจ ให้ใส่แท็ก <code>expected_response: 'true'</code> แล้วเขียน <code>check()</code> ยืนยันรหัสที่คาดไว้เอง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>10. เวลาตอบสนองดูดีเกินจริง จนไม่น่าเชื่อ</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">http_reqs......................: 500    50.00/s
+http_req_duration..............: avg=0.10ms  p(95)=0.15ms
+data_received..................: 0 B    0 B/s</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ปลายทางตอบข้อผิดพลาดเร็ว ๆ เช่น 404 หรือ 301</li>
+              <li>ยิงไปแคชหรือ proxy ที่ใกล้กว่าเดิม</li>
+              <li>คำขอไม่ได้ออกจากเครื่อง เช่นถูกเปลี่ยนทางไป localhost</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ดู <code>data_received</code> ถ้าเป็นศูนย์ต่อคำขอ แปลว่าไม่ได้ข้อมูลกลับมา</li>
+              <li>ดู <code>http_req_failed</code> ประกอบ ถ้าสูงพร้อม latency ต่ำมาก แปลว่าวัดการตอบปฏิเสธ</li>
+              <li>เขียน <code>check()</code> ยืนยันทั้งรหัสสถานะและเนื้อหา</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>11. ไม่เห็นค่า p99 ในสรุปผลท้ายการรัน</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">http_req_duration..............: avg=54.25ms min=4.21ms med=44.40ms max=584.70ms p(90)=65.31ms p(95)=74.53ms
+(ไม่มี p(99) ในบรรทัดนี้)</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>เป็นพฤติกรรมปกติ สรุปผลมาตรฐานแสดงเพียง avg, min, med, max, p(90), p(95)</li>
+              <li>ยังไม่ได้ตั้ง threshold ที่อ้างถึงเปอร์เซ็นไทล์นั้น</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ตั้ง threshold ที่อ้างถึงค่านั้น เช่น <span class="key-figure"><code>http_req_duration: ['p(99)&lt;1500']</code></span> แล้ว k6 จะพิมพ์ค่า p(99) ในบล็อกเกณฑ์</li>
+              <li>หรือส่งออกข้อมูลดิบด้วย <code>-o csv=raw.csv</code> แล้วคำนวณเอง เป็นวิธีที่ยืดหยุ่นที่สุด และใช้สร้างข้อมูลใน บทที่ 4</li>
+              <li>ใช้ <code>-o json=raw.json</code> ถ้าต้องการแท็กครบสำหรับกรอง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>12. จำนวน iterations ไม่เท่ากับจำนวน http_reqs</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">http_reqs......................: 3465   280.32/s
+iterations.....................: 1155   93.44/s</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>หนึ่งรอบของ <code>default()</code> ยิงหลายคำขอ เป็นเรื่องปกติ</li>
+              <li>คำขอจาก <code>setup()</code> ถูกนับใน <code>http_reqs</code> แต่ไม่นับเป็นรอบ</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>คำนวณ <code>http_reqs ÷ iterations</code> เพื่อดูว่าหนึ่งรอบยิงกี่คำขอ แล้วใช้ในสูตร TPS ตาม บทที่ 1</li>
+              <li>แยกคำขอด้วย <code>group()</code> และแท็ก <code>name</code> เพื่อดูว่าเวลาไปอยู่ขั้นตอนใด</li>
+              <li>รายงานทั้ง TPS และจำนวนคำขอต่อรอบคู่กัน</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>13. จำนวน VU ที่ทำได้จริงต่ำกว่าที่ตั้งไว้</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">vus............................: 4      min=4      max=4
+vus_max........................: 100    min=100    max=100
+dropped_iterations.............: 8420   702.10/s</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ใช้ executor แบบ arrival-rate ที่ตั้ง <code>maxVUs</code> ไว้ไม่พอ</li>
+              <li>แต่ละ VU ใช้เวลานานขึ้น</li>
+              <li>เครื่องทดสอบจำกัดหน่วยความจำหรือ connection</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ถ้า <code>dropped_iterations</code> มากกว่า 0 แปลว่าสร้างโหลดได้ต่ำกว่าแผน ต้องแก้ก่อนใช้ผล</li>
+              <li>เพิ่ม <code>maxVUs</code> ให้สูงพอ แล้วรันใหม่ดูว่ายังเป็นศูนย์ไหม</li>
+              <li>ถ้ายังทิ้งรอบ ให้เพิ่ม <code>preAllocatedVUs</code></li>
+              <li>ถ้าเครื่องทดสอบเป็นคอขวด ให้ลดอัตราเป้าหมาย</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <h2 id="group-threshold">กลุ่มที่ 4 — threshold ไม่ผ่าน</h2>
+
+      <details class="faq">
+        <summary>14. threshold ไม่ผ่านทั้งที่ตัวเลขดูดี</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">http_req_duration..............: avg=120.00ms p(95)=480.00ms
+  ไม่ผ่าน { p(95)&lt;500 }........: 520.00ms
+ERRO[0015] some thresholds have failed
+exit status 99</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ช่วงอุ่นเครื่องและช่วงไต่ขึ้นมีค่าสูง และยังถูกนับรวมในการตัดสิน</li>
+              <li>อ่านค่าเฉลี่ยแล้วคิดว่าผ่าน แต่เกณฑ์อยู่ที่เปอร์เซ็นไทล์</li>
+              <li>ตั้งเกณฑ์เข้มเกิน SLO</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>แยกช่วงภาวะคงตัวเป็น scenario ของตัวเอง (มี <code>startTime</code>) แล้วตั้ง threshold แบบอ้างแท็ก เช่น <code>'http_req_duration{scenario:steady}': ['p(95)&lt;500']</code></li>
+              <li>กรองเฉพาะช่วงภาวะคงตัวจากไฟล์ที่ส่งออกไว้</li>
+              <li>ถ้าปัญหาคือ k6 ตัดจบเร็วเกินไป ให้ใช้ <code>delayAbortEval</code> คู่กับ <code>abortOnFail: true</code> ในรูปแบบยาวของ threshold เช่น <span class="key-figure"><code>delayAbortEval: '180s'</code></span> — ตัวเลือกนี้<strong>เลื่อนเวลาที่จะตัดสินใจหยุดเท่านั้น ไม่ได้ตัดข้อมูลช่วงอุ่นเครื่องออกจากการคิดค่า threshold</strong> และ <code>delayAbortedCheck</code> ไม่มีใน k6 v2.2.0</li>
+              <li>ตรวจว่าเกณฑ์ตรงกับ SLO จริง ถ้า SLO เขียน p95 ต่ำกว่า 300 ก็ไม่ควรตั้ง 500</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>15. เกณฑ์บนอัตราความล้มเหลวไม่เคยผ่าน แม้ค่าดูเป็นศูนย์</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">http_req_failed................: 0.00%   ล้มเหลว 0 จาก 1,155
+  ไม่ผ่าน { rate&gt;1 }...........: 0.00%
+ERRO[0015] some thresholds have failed</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>เขียน <code>rate&lt;1</code> โดยคิดว่า 1 คือ 1% ทั้งที่จริงคือ 100%</li>
+              <li>กลับด้านเครื่องหมายเป็น <code>&gt;</code> แทน <code>&lt;</code></li>
+              <li>ตั้งเกณฑ์บน <code>checks</code> ทั้งที่สคริปต์ไม่มี <code>check()</code></li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>metric ชนิด Rate เก็บเป็นสัดส่วนทศนิยม 1% จึงเขียนเป็น <span class="key-figure"><code>0.01</code></span></li>
+              <li>ใช้เครื่องหมาย <code>&lt;</code> เสมอสำหรับเพดานที่ห้ามเกิน</li>
+              <li>ถ้าตั้งเกณฑ์บน <code>checks</code> ต้องมี <code>check()</code> จริง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>16. k6 ฟ้องว่าไวยากรณ์ของ threshold ไม่ถูกต้อง</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">ERRO[0000] invalid threshold: "p (95) &lt; 500"
+ERRO[0000] invalid threshold: "p95&lt;500"</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>ใส่ช่องว่างในนิพจน์</li>
+              <li>เขียน <code>p95</code> โดยไม่มีวงเล็บ</li>
+              <li>ใช้ชื่อเปอร์เซ็นไทล์ที่ k6 ไม่รู้จัก เช่น <code>p(95.5)</code></li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>เขียนให้ไม่มีช่องว่าง รูปแบบที่ถูกคือ <code>'p(95)&lt;500'</code></li>
+              <li>ใช้ตัวเลขเปอร์เซ็นไทล์ที่ k6 รองรับ เช่น 50, 90, 95, 99, 99.9</li>
+              <li>ถ้าต้องการค่าเฉลี่ยให้ใช้ชื่อ <code>avg</code> เช่น <code>'avg&lt;500'</code></li>
+              <li>ตรวจด้วย <code>k6 inspect script.js</code> ก่อนรันจริงทุกครั้ง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <h2 id="group-generator">กลุ่มที่ 5 — เครื่องที่รัน k6 เป็นคอขวดเอง</h2>
+
+      <details class="faq">
+        <summary>17. CPU ของเครื่องที่รัน k6 แตะ 100% ระหว่างการทดสอบ</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">เพิ่ม VU แล้ว http_reqs/s ไม่ขยับ แต่ CPU ของเครื่องรัน k6 อยู่ที่ 99-100%
+พร้อมกับ dropped_iterations ที่เริ่มมากกว่า 0</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>สคริปต์มีงานคำนวณหนัก เช่นประมวลผล JSON ก้อนใหญ่</li>
+              <li>VU สูงเกินกำลังเครื่องทดสอบ</li>
+              <li>รัน k6 บนเครื่องเดียวกับระบบปลายทาง</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ย้ายไปเครื่องที่ไม่มีงานอื่นทำ</li>
+              <li>ย้ายการเตรียมข้อมูลไปไว้ในบริบท <code>init</code></li>
+              <li>ปิดการบันทึกผลที่ไม่จำเป็น และเลี่ยงการพิมพ์ log ทุกคำขอ</li>
+              <li>ถ้ายังไม่พอ ให้กระจายไปหลายเครื่องและรวมผลเข้าที่เดียว</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>18. เครื่องรัน k6 หน่วยความจำเต็มเมื่อตั้ง VU จำนวนมาก</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">ERRO[0042] the k6 process was killed (out of memory)
+vus_max........................: 5000   min=5000   max=5000</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>k6 จอง VU ตาม <code>vus_max</code> หรือ <code>preAllocatedVUs</code> ซึ่งกินหน่วยความจำจริง</li>
+              <li>โหลดข้อมูลก้อนใหญ่ในบริบท <code>init</code> ทุก VU จึงถือสำเนาของตัวเอง</li>
+              <li>จองเกินจำเป็น เช่นจอง 5,000 VU แต่ใช้จริงเพียง 20</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ลด <code>preAllocatedVUs</code> ให้ใกล้จำนวนที่ใช้จริง ใช้ <code>maxVUs</code> เป็นเพดานยามจำเป็น</li>
+              <li>อ่านข้อมูลก้อนใหญ่ในบริบท <code>init</code> แล้วเก็บเฉพาะค่าที่ต้องใช้</li>
+              <li>ตรวจว่า <code>vus_max</code> ใกล้เคียงกับ <code>vus</code> ที่ใช้จริง</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>19. ตัวเลขที่ได้ไม่ตรงกับที่คาดไว้เลยแม้จะตั้งค่าเหมือนเดิม</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">อาการที่เห็น</span>
+            <pre class="faq__symptom">การรันครั้งแรกได้ 93.44/s ครั้งถัดไปได้ 71.20/s โดยใช้คำสั่งเดิมทุกอย่าง</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>มีงานอื่นรันบนเครื่องทดสอบหรือเครื่องปลายทาง</li>
+              <li>แคชอุ่นไม่เท่ากันในแต่ละรอบ</li>
+              <li>ข้อมูลทดสอบเปลี่ยนไป คำขอจึงไม่เท่าเดิม</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>รันซ้ำอย่างน้อยสามครั้ง ถ้าแกว่งมากกว่า 20% ให้ตรวจสภาพแวดล้อมก่อน</li>
+              <li>จดสภาพแวดล้อมทุกครั้ง ทั้งเครื่องที่รัน สาขา commit และช่วงเวลาที่รัน</li>
+              <li>ใช้ smoke test ยืนยันว่าปลายทางตอบตรงกันก่อนทุกรอบ</li>
+              <li>เปรียบเทียบตัวเลขระหว่างรอบด้วย <code>--summary-export</code> แทนการเทียบด้วยสายตา</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+      <details class="faq">
+        <summary>20. จะรู้ได้อย่างไรว่าผลที่ได้เชื่อถือได้จริง</summary>
+        <div class="faq__body">
+          <div class="faq__row">
+            <span class="faq__tag">สัญญาณที่บอกว่าผลยังเชื่อถือไม่ได้</span>
+            <pre class="faq__symptom">running (0.4s) — สั้นเกินกว่าจะมีความหมาย
+dropped_iterations มากกว่า 0
+http_req_failed สูงกว่า 1%
+vus ที่ทำได้จริงต่ำกว่าที่ตั้งไว้</pre>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">สาเหตุที่เป็นไปได้</span>
+            <ul>
+              <li>รันสั้นเกินไปจนช่วงอุ่นเครื่องกินสัดส่วนมาก</li>
+              <li>โหลดที่ตั้งใจไว้ไม่ได้ถูกสร้างจริง</li>
+              <li>มีข้อผิดพลาดแต่ไม่มีเกณฑ์ใดจับได้</li>
+            </ul>
+          </div>
+          <div class="faq__row">
+            <span class="faq__tag">วิธีแก้</span>
+            <ol>
+              <li>ตั้งเกณฑ์ให้ครอบทุกด้านสำคัญ ได้แก่ <code>http_req_duration</code> บนเปอร์เซ็นไทล์, <code>http_req_failed</code>, <code>checks</code> และ <code>dropped_iterations</code></li>
+              <li>รันยาวพอให้ช่วงภาวะคงตัวกินเวลาอย่างน้อยห้านาที</li>
+              <li>ตรวจสามอย่างก่อนอ่านตัวเลข คือบรรทัด <code>running</code>, <code>dropped_iterations</code> และอัตราความผิดพลาด</li>
+            </ol>
+          </div>
+        </div>
+      </details>
+
+    </div>
+
+    <h2 id="still-stuck">ถ้ายังแก้ไม่ได้</h2>
+
+    <ol class="steps">
+      <li><strong>ลดขนาดปัญหาให้เล็กที่สุด</strong> ใช้ 1 VU นาน 10 วินาที ถ้าอาการยังเกิดที่ขนาดนี้ ปัญหาอยู่ที่สคริปต์หรือปลายทาง</li>
+      <li><strong>ตัดสคริปต์ให้เหลือคำขอเดียว</strong> ลบ check, threshold และ custom metric ออกก่อน แล้วใส่กลับทีละอย่าง</li>
+      <li><strong>ยิงด้วย <code>curl</code> เทียบ</strong> ถ้า curl ได้แต่ k6 ไม่ได้ ปัญหาอยู่ที่สคริปต์ ถ้าไม่ได้ทั้งคู่ ปัญหาอยู่ที่เครือข่ายหรือปลายทาง</li>
+      <li><strong>เทียบกับสคริปต์ตัวอย่าง</strong> ใน <a href="examples.html">หน้าสคริปต์ตัวอย่าง</a> ซึ่งรันได้จริงกับ mock server ที่แนบมา ถ้าตัวอย่างรันได้ แต่ของคุณไม่ได้ ให้เทียบทีละบรรทัด</li>
+      <li><strong>อ่านเอกสารทางการ</strong> ที่ <a href="https://grafana.com/docs/k6/latest/" rel="noopener">grafana.com/docs/k6</a> โดยค้นจากข้อความ error ที่เห็น</li>
+    </ol>
+
+  </main>
+
+  <aside class="toc" id="toc" aria-label="สารบัญในหน้านี้"></aside>
+
+</div>
+
+<footer class="site-footer" id="footer"></footer>
+
+<script src="assets/js/storage.js"></script>
+<script src="assets/js/site.js"></script>
+
+</body>
+</html>
